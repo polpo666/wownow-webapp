@@ -1,0 +1,67 @@
+<template>
+  <view class="grid grid-cols-2 gap-16rpx">
+    <view
+      wx:for="{{ list }}"
+      wx:key="id"
+      class="bg-[#2B2B2B] rounded-24rpx overflow-hidden transition-transform active:scale-95"
+      bindtap="handleItemClick"
+      data-item="{{ item }}"
+    >
+      <!-- 图片区域 -->
+      <view class="w-full h-0 pb-[100%] relative bg-[#1A1A1A] rounded-b-16rpx overflow-hidden">
+        <image
+          wx:if="{{ item.generatedImageUrl }}"
+          src="{{ item.generatedImageUrl }}"
+          class="absolute top-0 left-0 w-full h-full object-cover"
+          mode="aspectFill"
+          lazy-load
+        />
+        <image
+          wx:else
+          src="../../../assets/svgs/image-placeholder.svg"
+          class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64rpx h-64rpx opacity-60"
+          mode="aspectFit"
+        />
+      </view>
+
+      <!-- 文字区域 -->
+      <view class="px-16rpx py-18rpx flex items-center justify-between">
+        <view class="font-medium text-26rpx text-white truncate flex-1 text-left">
+          {{ item.name || '未命名资产' }}
+        </view>
+        <view class="px-10rpx py-6rpx border border-solid border-[#575757] text-20rpx rounded-16rpx text-gray-300 ml-8rpx flex-shrink-0">
+          {{ item.craftType || '未命名工艺' }}
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core';
+import { Asset } from '@/types/asset';
+
+createComponent({
+  properties: {
+    list: {
+      type: Array<Asset>,
+      value: []
+    }
+  },
+
+  methods: {
+    handleItemClick(event: any) {
+      const { item } = event.currentTarget.dataset;
+      wx.navigateTo({
+        url: `/subPackages/history/detail?id=${item.id}`
+      });
+    }
+  }
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true
+}
+</script>

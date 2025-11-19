@@ -1,0 +1,212 @@
+<template>
+  <view class="w-screen h-full flex flex-col">
+    <!-- 吸顶占位符, 避免顶部出现间隙 -->
+    <!-- <view wx:if="{{ isTabsSticky }}" style="top:{{ navBarHeight-1 }}px;" class="z-100 fixed h-2px w-full bg-#0D0D0D"></view> -->
+
+    <!-- Tab 导航栏 -->
+    <view id="style-tabs-wrapper">
+      <scroll-view
+        scroll-x="{{ true }}"
+        scroll-with-animation
+        show-scrollbar="{{ false }}"
+        enhanced="{{ true }}"
+        scroll-left="{{ scrollLeft }}"
+        id="style-tabs"
+      >
+        <view class="flex flex-row gap-8rpx py-24rpx px-30rpx">
+          <view
+            wx:for="{{ promptStyles }}"
+            wx:key="id"
+            wx:for-item="item"
+            id="tab-{{item.id}}"
+            class="shrink-0 py-10rpx pr-32rpx pl-20rpx rounded-24rpx flex items-center gap-8rpx relative {{ selectedStyle === item.id ? 'bg-#FCDF4C20 text-#FCDF4C border border-solid border-#FCDF4C' : 'bg-white/10 text-white/55 border-none' }}"
+            bindtap="onTabChange(item.id)"
+          >
+            <view class="{{  selectedStyle === item.id ? 'w-80rpx h-80rpx absolute -top-8rpx left-8rpx' : 'w-60rpx h-60rpx' }}">
+              <image src="{{ item.thumbnail }}" mode="aspectFit" class="w-full h-full" />
+            </view>
+            <text class="text-24rpx {{ selectedStyle === item.id && 'pl-64rpx' }}">{{ item.name }}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+    
+    <!-- 吸顶占位符，避免布局跳跃 -->
+    <!-- <view class="transition-all w-full py-24rpx px-30rpx pointer-events-none {{ isTabsSticky ? 'block' : 'hidden' }}">
+      <view class="flex flex-row gap-8rpx">
+        <view class="shrink-0 py-10rpx pr-32rpx pl-20rpx rounded-24rpx flex items-center gap-8rpx">
+          <view class="w-60rpx h-60rpx"></view>
+          <text class="text-24rpx">占位</text>
+        </view>
+      </view>
+    </view> -->
+
+    <!-- Tab 内容区 -->
+     <view class="flex-1 pt-8rpx">
+        <!-- 骨架屏 -->
+        <view wx:if="{{ isTemplatesLoading }}" class="grid grid-cols-2 gap-16rpx px-30rpx pb-30rpx">
+          <view wx:for="{{ skeletonItems }}" wx:key="index" class="bg-#2B2B2B rounded-32rpx overflow-hidden animate-pulse">
+            <view class="aspect-square w-full bg-#1A1A1A rounded-16rpx"></view>
+            <view class="flex items-center justify-between p-20rpx">
+              <view class="h-26rpx bg-#404040 rounded flex-1 mr-16rpx"></view>
+              <view class="h-40rpx w-64rpx bg-#404040 rounded-16rpx"></view>
+            </view>
+          </view>
+        </view>
+
+        <view wx:elif="{{ templates.length === 0 }}" class="py-48rpx h-full flex flex-col justify-center items-center">
+          <image src="/src/assets/base/no-data.png" class="w-180rpx h-180rpx mb-12rpx" mode="aspectFit" />
+          <text class="text-white/55 text-28rpx text-center">暂无推荐内容</text>
+        </view>
+
+        <view wx:else class="grid grid-cols-2 gap-2 px-30rpx pb-30rpx">
+          <view
+            wx:for="{{ templates }}"
+            wx:key="id"
+            wx:for-item="template"
+            class="bg-#2B2B2B rounded-32rpx overflow-hidden"
+            bind:tap="goTemplateDetail(template.id)"
+          >
+            <view class="aspect-square w-full rounded-16rpx overflow-hidden">
+              <image src="{{ template.coverUrl + '?x-oss-process=image/resize,p_50' }}" mode="aspectFill" class="w-full h-full" />
+            </view>
+            <view class="flex items-center justify-between p-20rpx">
+              <text class="text-white text-26rpx font-medium">{{ template.name }}</text>
+              <view class="whitespace-nowrap text-white text-24rpx rounded-16rpx border border-solid !border-white py-4rpx px-12rpx">
+                {{ template.craftType }}
+              </view>
+            </view>
+          </view>
+        </view>
+     </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from "@mpxjs/core";
+import { WownowPromptStyle, WownowTemplate } from "@/types";
+import { getPromptStyles, getTemplates } from "@/api/template";
+
+createComponent({
+  properties: {
+    isTabsSticky: {
+      type: Boolean,
+      value: false
+    },
+  },
+  data: {
+    promptStyles: [] as WownowPromptStyle[],
+    templates: [] as WownowTemplate[],
+    isTemplatesLoading: false,
+    selectedStyle: 0,
+    scrollLeft: 0,
+    navBarHeight: 0,
+  },
+  computed: {
+    skeletonItems() {
+      return Array.from({ length: 12 }, (_, index) => index + 1);
+    },
+    tabsWrapperStyles() {
+      if (this.isTabsSticky) {
+        return `position: fixed; top: ${this.navBarHeight}px; left: 0; right: 0; z-index: 50;`;
+      } else {
+        return `position: relative;`;
+      }
+    },
+  },
+  async created() {
+    const windowInfo = wx.getWindowInfo();
+    this.navBarHeight = windowInfo.statusBarHeight + 44;
+
+    this.initPromptStyles();
+  },
+  methods: {
+    async initPromptStyles() {
+      this.scrollLeft = 0;
+      try {
+        const response = await getPromptStyles({ pagination: false })
+        if (response.code === 0 && response.data?.list) {
+          this.promptStyles = response.data.list.filter(style => style.nameEn !== 'high_definition_magnification')
+          this.handleChangeStyleId(this.promptStyles[0].id);
+        } else {
+          console.warn("Failed to fetch prompt styles:", response.message);
+          wx.showToast({ title: "获取风格列表失败", icon: "none" });
+        }
+      } catch (error) {
+        console.error(error);
+        wx.showToast({ title: "获取风格列表失败", icon: "none" });
+      }
+    },
+
+    onTabChange(styleId: number) {
+      this.handleChangeStyleId(styleId);
+
+      this.$nextTick(() => {
+        const query = this.createSelectorQuery();
+        query.select('#style-tabs-wrapper').boundingClientRect();
+        query.exec(res => {
+          const tabBarTop = res?.[0].top || 0;
+          this.triggerEvent('tabChange', { styleId, tabBarTop });
+        })
+      });
+
+      // 滚动到目标tab居中
+      this.$nextTick(() => {
+        const query = this.createSelectorQuery();
+        query.select('#style-tabs').boundingClientRect();
+        query.select(`#tab-${styleId}`).boundingClientRect();
+        query.select('#style-tabs').scrollOffset();
+        query.exec(res => {
+          const scrollViewRect = res[0];
+          const tabRect = res[1];
+          const scrollOffset = res[2]?.scrollLeft || 0;
+          if (!scrollViewRect || !tabRect) return;
+          // 计算tab中心点相对scroll-view左边界的距离
+          const tabCenter = tabRect.left - scrollViewRect.left + scrollOffset + tabRect.width / 2;
+          // 让tab居中
+          let newScrollLeft = tabCenter - scrollViewRect.width / 2;
+          // 限制滚动范围，防止越界
+          if (newScrollLeft < 0) newScrollLeft = 0;
+          this.scrollLeft = newScrollLeft;
+        });
+      });
+    },
+
+    handleChangeStyleId(styleId: number) {
+      this.selectedStyle = styleId;
+      this.getTemplatesByStyleId(styleId);
+    },
+
+    async getTemplatesByStyleId(styleId: number) {
+      this.isTemplatesLoading = true;
+      try {
+        const response = await getTemplates({ pagination: false, styleId, status: 1, position: "home_page" });
+        if (response.code === 0 && response.data) {
+          this.templates = response.data.list || [];
+        } else {
+          console.warn("Failed to fetch templates by styleId:", response.message);
+          wx.showToast({ title: "获取模板列表失败", icon: "none" });
+        }
+      } catch (error) {
+        console.error(error);
+        wx.showToast({ title: "获取模板列表失败", icon: "none" });
+      } finally {
+        this.isTemplatesLoading = false;
+      }
+    },
+
+    goTemplateDetail(templateId: number) {
+      wx.navigateTo({
+        url: `/subPackages/home/template?id=${templateId}`
+      });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {}
+}
+</script>

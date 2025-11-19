@@ -1,0 +1,296 @@
+<template>
+  <view class="fixed bottom-0 bg-black left-0 right-0 border-t-1 border-[#2b2b2b] py-20rpx px-40rpx z-100"
+    style="padding-bottom: calc(20rpx + {{ safeAreaBottom || 0 }}px)">
+    <view class="flex items-center justify-between gap-16rpx">
+      <view class="flex items-center relative" catchtap="handleMoreAction">
+        <view class="h-72rpx border-1 border-[#2b2b2b] rounded-16rpx flex flex-col items-center justify-center">
+          <image src="../../../../assets/more.svg" class="w-40rpx h-40rpx mb-4rpx" mode="aspectFit" />
+          <text class="text-white text-20rpx">更多</text>
+        </view>
+        <view wx:if="{{ showTooltip && (completedOrder || closedOrder) }}" class="tooltip" catchtap="stopPropagation">
+          <view class="tooltip-content" catchtap="handleDeleteOrder">
+            <text class="text-black text-24rpx">删除</text>
+          </view>
+        </view>
+      </view>
+      <view wx:if="{{ pendingOrder }}"
+        class="flex-1 h-80rpx bg-[#232323] text-white rounded-20rpx flex items-center justify-center text-28rpx font-medium"
+        bindtap="handleCancelOrder">
+        取消订单
+      </view>
+      <view wx:if="{{ readyForPickupOrder || completedOrder }}"
+        class="flex-1 h-80rpx bg-[#232323] text-white rounded-20rpx flex items-center justify-center text-28rpx font-medium"
+        bindtap="goAfterServicePage">
+        申请售后
+      </view>
+      <view wx:if="{{ closedOrder }}"
+        class="flex-1 h-80rpx bg-[#232323] text-white rounded-20rpx flex items-center justify-center text-28rpx font-medium"
+        bindtap="goAfterServicePage">
+        售后详情
+      </view>
+      <view wx:if="{{ pendingOrder }}"
+        class="flex-1 h-80rpx bg-[#FADA39] text-black rounded-20rpx flex items-center justify-center text-28rpx font-medium"
+        bindtap="handlePickup">
+        确认支付
+      </view>
+      <view wx:if="{{ completedOrder }}"
+        class="flex-1 h-80rpx bg-[#FADA39] text-black rounded-20rpx flex items-center justify-center text-28rpx font-medium"
+        bindtap="handlePickup">
+        再次下单
+      </view>
+      <view wx:if="{{ readyForPickupOrder }}"
+        class="flex-1 h-80rpx bg-[#FADA39] text-black rounded-20rpx flex items-center justify-center text-28rpx font-medium"
+        bindtap="handlePickup">
+        确认取件
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core';
+import { OrderStatus, OrderTrackingRes } from '@/types/order';
+import { cancelOrder, deleteOrder, confirmPickup } from '@/api/order';
+
+interface ButtonsData {
+  showTooltip: boolean
+  safeAreaBottom: number
+}
+
+createComponent({
+  properties: {
+    orderSn: {
+      type: String,
+      value: ''
+    },
+    orderData: {
+      type: Object,
+      value: {} as OrderTrackingRes
+    }
+  },
+
+  data(): ButtonsData {
+    return {
+      showTooltip: false,
+      safeAreaBottom: 0
+    }
+  },
+  computed: {
+    pendingOrder() { // 待支付
+      return this.properties.orderData?.order?.status === OrderStatus.PENDING;
+    },
+    paidOrder() { // 排单中
+      return this.properties.orderData?.order?.status === OrderStatus.PAID;
+    },
+    processingOrder() { // 生产中
+      return this.properties.orderData?.order?.status === OrderStatus.PROCESSING;
+    },
+    readyForPickupOrder() { // 待取货
+      return this.properties.orderData?.order?.status === OrderStatus.READY_FOR_PICKUP;
+    },
+    completedOrder() { // 订单完成
+      return this.properties.orderData?.order?.status === OrderStatus.COMPLETED;
+    },
+    closedOrder() { // 订单关闭
+      return this.properties.orderData?.order?.status === OrderStatus.CLOSED;
+    },
+    errorOrder() { // 订单异常
+      return this.properties.orderData?.order?.status === OrderStatus.ERROR;
+    },
+    detainOrder() { // 订单滞留
+      return this.properties.orderData?.order?.status === OrderStatus.DETAIN;
+    },
+  },
+
+  attached() {
+    const systemInfo = wx.getSystemInfoSync();
+    const safeArea = systemInfo.safeArea;
+    if (safeArea) {
+      this.setData({
+        safeAreaBottom: systemInfo.screenHeight - safeArea.bottom
+      });
+    }
+  },
+
+  methods: {
+    handleMoreAction() {
+      // 切换 tooltip 显示状态
+      this.showTooltip = !this.showTooltip;
+    },
+
+    stopPropagation() {
+      // 阻止事件冒泡，防止点击 tooltip 时关闭
+    },
+
+    goOrderListPage() {
+      const pages = getCurrentPages();
+
+      if (pages.length > 1) {
+        const prevPage = pages[pages.length - 2];
+        // 检查上一页是否是订单列表页
+        if (prevPage.route === 'pages/order/index') {
+          // 上一页是订单列表，直接返回
+          wx.navigateBack();
+        } else {
+          // 上一页不是订单列表，跳转到订单列表
+          wx.switchTab({ url: '/pages/order/index' });
+        }
+      } else {
+        // 只有一个页面，跳转到订单列表
+        wx.switchTab({ url: '/pages/order/index' });
+      }
+    },
+
+    goAfterServicePage() {
+      if (!this.properties.orderData?.order) return;
+      const orderSn = this.properties.orderData.order.orderSn;
+      const payAmount = this.properties.orderData.order?.payAmount;
+      wx.navigateTo({
+        url: `/subPackages/order/after-service?orderSn=${orderSn}&payAmount=${payAmount}`
+      });
+    },
+
+    handleDeleteOrder() {
+      wx.showModal({
+        title: '删除订单',
+        content: `确定要删除此订单吗？`,
+        confirmText: '确认',
+        cancelText: '取消',
+        success: (res) => {
+          if (res.confirm) {
+            deleteOrder(this.properties.orderSn).then(res => {
+              if (res.code === 0 && res.data && res.data.isSuccess) {
+                wx.showToast({
+                  title: '订单已删除',
+                  icon: 'success'
+                });
+                setTimeout(() => {
+                  this.goOrderListPage();
+                }, 500);
+              } else {
+                wx.showToast({
+                  title: '删除订单失败',
+                  icon: 'error'
+                });
+              }
+            }).catch(err => {
+              console.error('删除订单失败:', err);
+              wx.showToast({
+                title: '删除订单失败，请稍后重试',
+                icon: 'error'
+              });
+            });
+          }
+        },
+        fail: () => {
+        }
+      })
+    },
+
+    handleCancelOrder() {
+      wx.showModal({
+        content: '确定要取消此订单吗？',
+        success: (_res) => {
+          if (_res.confirm) {
+            if (this.properties.orderSn) {
+              cancelOrder(this.properties.orderSn).then(res => {
+                console.log('取消订单结果:', res);
+                if (res.code === 0) {
+                  wx.showToast({
+                    title: '订单已取消',
+                    icon: 'success'
+                  });
+                  setTimeout(() => {
+                    this.goOrderListPage();
+                  }, 500);
+                } else {
+                  wx.showToast({
+                    title: res.message || '取消订单失败',
+                    icon: 'error'
+                  });
+                }
+              }).catch(err => {
+                console.error('取消订单失败:', err);
+                wx.showToast({
+                  title: '取消订单失败，请稍后重试',
+                  icon: 'error'
+                });
+              });
+            }
+          }
+        }
+      })
+    },
+
+    handlePickup() {
+      wx.showModal({
+        title: '确认取件',
+        content: '确认已取到商品吗？',
+        confirmText: '确认',
+        cancelText: '取消',
+        success: (res) => {
+          if (res.confirm) {
+            this._confirmPickup();
+          }
+        }
+      });
+    },
+
+    async _confirmPickup() {
+      if (!this.properties.orderSn) return;
+      try {
+        wx.showLoading({ title: '确认中...' });
+        const res = await confirmPickup(this.properties.orderSn);
+        if (res.code === 0) {
+          wx.showToast({
+            title: '取件成功',
+            icon: 'success'
+          });
+          setTimeout(() => {
+            this.goOrderListPage();
+          }, 500);
+        } else {
+          wx.showToast({
+            title: res.message || '确认取件失败',
+            icon: 'error'
+          });
+        }
+      } catch (error) {
+        console.error('确认取件失败:', error);
+        wx.showToast({
+          title: '确认取件失败，请稍后重试',
+          icon: 'error'
+        });
+      } finally {
+        wx.hideLoading();
+      }
+    }
+  }
+})
+</script>
+<script type="application/json">
+  {
+    "component": true
+  }
+</script>
+
+<style lang="stylus">
+.tooltip
+  position absolute
+  bottom 100%
+  left 50%
+  transform translateX(-50%)
+  margin-bottom 12rpx
+  opacity 1
+  transition all 0.2s ease-out
+
+.tooltip-content
+  background #FFFFFF
+  border-radius 8rpx
+  padding 12rpx 24rpx
+  margin 0 20rpx
+  box-shadow 0 4rpx 12rpx rgba(0, 0, 0, 0.3)
+  white-space nowrap
+  position relative
+  z-index 1001
+</style>

@@ -1,0 +1,47 @@
+<template>
+  <van-popup
+    show="{{ show }}"
+    position="center"
+    custom-class="rounded-32rpx bg-white"
+    bind:close="handleClose"
+  >
+    <view class="w-[85vw] rounded-32rpx px-48rpx pt-48rpx pb-32rpx bg-white">
+      <view class="text-36rpx font-medium text-#0A0A0A text-center">{{ title }}</view>
+      <slot></slot>
+      <van-button block type="primary" custom-class="!text-32rpx" bind:click="handleClose">我知道了</van-button>
+    </view>
+  </van-popup>
+</template>
+
+<script lang="ts">
+import { createComponent } from "@mpxjs/core";
+
+createComponent({
+  properties: {
+    show: {
+      type: Boolean,
+      value: false,
+    },
+    title: {
+      type: String,
+      value: '活动规则',
+    },
+  },
+  data: {}, 
+  methods: {
+    handleClose() {
+      this.triggerEvent('close');
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-popup": "@vant/weapp/popup/index",
+  }
+}
+</script>

@@ -1,0 +1,268 @@
+<template>
+  <view class="bg-[#232323] h-full flex flex-col">
+    <view class="flex-1 overflow-auto p-30rpx">
+      <!-- 可使用优惠券标题 -->
+      <view class="flex gap-16rpx items-center">
+        <text class="text-32rpx font-medium text-[#d4d4d4]">可使用优惠券</text>
+        <image
+          src="../../assets/svgs/icon-ticket.svg"
+          class="w-32rpx h-32rpx"
+          mode="aspectFit"
+        />
+      </view>
+
+      <view
+        wx:if="{{ availableCoupons.length === 0 }}"
+        class="flex flex-col items-center justify-center {{ unavailableCoupons.length > 0 ? 'my-120rpx' : 'mt-240rpx' }}"
+      >
+        <image
+          src="../../assets/base/no-data.png"
+          class="{{ unavailableCoupons.length > 0 ? 'w-160rpx h-160rpx' : 'w-200rpx h-200rpx' }}"
+          mode="aspectFit"
+        />
+        <text class="text-28rpx text-[#9C9C9C] mt-24rpx">暂无优惠券可用</text>
+      </view>
+
+      <!-- 可使用优惠券列表 -->
+      <block wx:if="{{ availableCoupons.length > 0 }}" wx:for="{{ availableCoupons }}" wx:key="id">
+        <coupon-card coupon="{{ item }}" selectedIds="{{ selectedIds }}" bind:select="handleSelectCoupon" />
+      </block>
+
+      <block wx:if="{{ unavailableCoupons.length > 0 }}">
+        <!-- 不可使用优惠券标题 -->
+        <view class="flex gap-16rpx items-center mt-24rpx">
+          <text class="text-32rpx font-medium text-[#d4d4d4] leading-52rpx">不可使用优惠券</text>
+          <image
+            src="../../assets/svgs/icon-ticket.svg"
+            class="w-32rpx h-32rpx"
+            mode="aspectFit"
+          />
+        </view>
+
+        <!-- 不可使用优惠券列表 -->
+        <block wx:for="{{ unavailableCoupons }}" wx:key="id">
+          <coupon-card showMask="{{ true }}" coupon="{{ item }}" />
+        </block>
+      </block>
+    </view>
+
+    <view class="px-30rpx py-24rpx">
+      <van-button
+        block
+        type="primary"
+        custom-class="!border-none !bg-#FADA39 !text-#0A0A0A"
+        bind:click="onConfirm"
+      >
+        确认
+      </van-button>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { getCouponList } from "@/api/promotion";
+import { ExtendedUserCoupon, UserCoupon } from "@/types";
+import { createComponent } from "@mpxjs/core";
+
+createComponent({
+  options: {
+    styleIsolation: "shared",
+  },
+  properties: {
+    totalPrice: {
+      type: Number,
+      value: 0,
+    },
+    templateId: {
+      type: Number,
+      value: 0,
+    },
+  },
+  data: {
+    couponList: [] as ExtendedUserCoupon[],
+    selectedCoupons: [] as UserCoupon[],
+  },
+
+  computed: {
+    availableCoupons() {
+      return this.couponList.filter((c) => c.unavailableReasons === undefined || c.unavailableReasons.length === 0);
+    },
+    unavailableCoupons() {
+      return this.couponList.filter((c) => c.unavailableReasons !== undefined && c.unavailableReasons.length > 0);
+    },
+    selectedIds() {
+      return this.selectedCoupons.map(coupon => coupon.id);
+    },
+  },
+
+  async created() {
+    await this.fetchUnusedCoupons();
+  },
+
+  methods: {
+    async fetchUnusedCoupons() {
+      try {
+        const res = await getCouponList({
+          page: 1,
+          pageSize: 100,
+          status: "unused",
+        });
+        if (res.code === 0 && res.data?.list) {
+          const list = res.data.list as ExtendedUserCoupon[];
+          for (const coupon of list) {
+            const reasons = this.getUnavailableReasons(coupon);
+            if (reasons.length > 0) {
+              coupon.unavailableReasons = reasons;
+            }
+          }
+          this.setData({ couponList: list });
+        } else {
+          console.warn("Failed to fetch unused coupons:", res.message);
+        }
+      } catch (error) {
+        console.error("Failed to fetch unused coupons:", error);
+      }
+    },
+
+    getUnavailableReasons(coupon: UserCoupon): string[] {
+      let reasons = [];
+
+      const today = Date.now();
+      const validStart = new Date(coupon.validStart.replace(/-/g, '/')).getTime();
+
+      // 1. 检查时间有效性
+      if (today < validStart) {
+        reasons.push("未到可用时间");
+      }
+
+      // 2. 检查使用门槛（仅对满减券）
+      if (coupon.type === "cash" && this.totalPrice < coupon.thresholdAmount) {
+        reasons.push(`满${coupon.thresholdAmount}可用`);
+      }
+
+      // 3. 检查使用范围
+      const scopeCheckResult = this.checkScopeDetail(coupon);
+      if (scopeCheckResult !== "") {
+        reasons.push(scopeCheckResult);
+      }
+
+      return reasons;
+    },
+
+    checkScopeDetail(coupon: UserCoupon): string {
+      const rules = coupon.scopeJson?.rules || [];
+      
+      if (rules.length === 0 || !this.templateId) {
+        return "";
+      }
+
+      for (const rule of rules) {
+        if (rule.targetType === "template") {
+          const templateIds = rule.values || [];
+
+          if (templateIds.length === 0) {
+            continue; // 无具体模板限制，跳过
+          }
+          
+          if (rule.ruleType === "inclusion") {
+            // 包含规则：模板ID必须在允许的列表中
+            if (!templateIds.includes(this.templateId)) {
+              return "仅限部分品类可用";
+            }
+          } else if (rule.ruleType === "exclusion") {
+            // 排除规则：模板ID不能在排除的列表中
+            if (templateIds.includes(this.templateId)) {
+              return "当前品类不可用";
+            }
+          }
+        }
+      }
+
+      return "";
+    },
+
+    handleSelectCoupon(e: { detail: { coupon: UserCoupon } }) {
+      const targetCoupon = e.detail.coupon;
+      if (!targetCoupon) return;
+
+      const isAlreadySelected = this.selectedCoupons.some(coupon => coupon.id === targetCoupon.id);
+      let newSelectedCoupons: UserCoupon[];
+
+      // 可叠加的满减券，多选
+      if (targetCoupon.stackable && targetCoupon.type === "cash") {
+        if (isAlreadySelected) {
+          newSelectedCoupons = this.selectedCoupons.filter(item => item.id !== targetCoupon.id);
+        } else {
+          // 检查是否可以与已选券叠加使用
+          if (this.selectedCoupons.every(c => c.stackable && c.type === "cash")) {
+            const stackedCoupons = [...this.selectedCoupons, targetCoupon];
+            newSelectedCoupons = this.canStackCoupons(stackedCoupons) ? stackedCoupons : [targetCoupon];
+          } else {
+            newSelectedCoupons = [targetCoupon];
+          }
+        }
+      } else {
+        // 不可叠加，单选
+        newSelectedCoupons = isAlreadySelected ? [] : [targetCoupon];
+      }
+      this.setData({ selectedCoupons: newSelectedCoupons });
+    },
+
+    /**
+     * 检查满减券是否可以叠加使用
+     * 计算叠加后的实际支付金额是否仍满足每个券的使用门槛
+     * @param coupons 要检查的优惠券列表
+     * @returns 是否可以叠加
+     */
+    canStackCoupons(coupons: UserCoupon[]): boolean {
+      if (coupons.length === 0) return true;
+
+      // 按使用门槛从高到低排序，优先使用门槛高的券
+      const sortedCoupons = coupons
+        .filter(c => c.type === "cash")
+        .sort((a, b) => b.thresholdAmount - a.thresholdAmount);
+
+      let remainingAmount = this.totalPrice;
+
+      for (const coupon of sortedCoupons) {
+        // 检查当前剩余金额是否满足该券的使用门槛
+        if (remainingAmount < coupon.thresholdAmount) {
+          return false;
+        }
+        // 使用该券后，减少相应金额
+        remainingAmount -= coupon.thresholdAmount;
+      }
+
+      return true;
+    },
+
+    onConfirm() {
+      this.triggerEvent("confirm", { coupons: this.selectedCoupons });
+    },
+  },
+});
+</script>
+
+<style lang="stylus">
+.van-cell
+  padding 0 !important
+  font-size 26rpx !important
+
+.van-collapse-item__content
+  background-color transparent !important
+  padding 0 !important
+  font-size 26rpx !important
+  color #9C9C9C !important
+</style>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-collapse": "@vant/weapp/collapse/index",
+    "van-collapse-item": "@vant/weapp/collapse-item/index",
+    "van-button": "@vant/weapp/button/index",
+    "coupon-card": "./coupon-card"
+  }
+}
+</script>

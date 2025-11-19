@@ -1,0 +1,201 @@
+<template>
+  <!-- 遮罩层，用于点击外部区域关闭 -->
+  <view wx:if="{{ show }}" class="mask" bindtap="closeTemplateSelector"></view>
+  <view wx:if="{{ show }}"
+    class="template-container absolute left-0 right-0 bottom-[90rpx] px-3 py-2 bg-black h-[900rpx]">
+    <view class="grid grid-cols-2 gap-1">
+      <view wx:for="{{ templates }}" wx:key="id" class="template-item" bindtap="onTemplateClick" data-item="{{ item }}">
+        <view class="image-container">
+          <image src="{{ item.coverUrl || '/src/assets/base/no-data.png' }}" mode="aspectFill" class="template-image" />
+        </view>
+        <view class="template-name">{{ item.name }}</view>
+      </view>
+    </view>
+  </view>
+  <view class="rounded-lg text-[13px] flex justify-center items-center px-2 py-1 gap-2"
+    style="border: 1px solid {{ noTemplate ? '#333333' : '#575757' }}; color: {{ noTemplate ? '#999999' : '#ffffff' }};"
+    bindtap="toggle">
+    <image class="w-30rpx h-30rpx" src="../../assets/template.png" mode="aspectFill"
+      style="filter: {{ noTemplate ? 'brightness(0.5)' : 'none' }};" />
+    模板
+  </view>
+</template>
+
+<script>
+import { createComponent } from "@mpxjs/core";
+import { getTemplates } from "@/api/template";
+import { mapState } from "@mpxjs/pinia";
+import { useChatStore } from "@/store";
+import { TemplateLabel } from "@/types";
+
+createComponent({
+  data: {
+    show: false,
+    templates: [],
+    noTemplate: false,
+    isLoading: false,
+  },
+  created() {
+    this.fetchTemplates();
+  },
+  computed: {
+    ...mapState(useChatStore, ['chatTemplate']),
+  },
+  watch: {
+    chatTemplate: {
+      handler(newVal) {
+      },
+      immediate: true
+    }
+  },
+  methods: {
+    async fetchTemplates() {
+      this.isLoading = true;
+      try {
+        const response = await getTemplates({ pagination: false, position: "chat_box", status: 1 });
+        if (response.code === 0 && response.data) {
+          let { list } = response.data;
+          if (this.chatTemplate && this.chatTemplate.name.includes('纪念币')) {
+            list = list.filter(item => item.name !== '拍立得合照' && item.name !== '合照');
+          }
+          this.setData({
+            templates: list || [],
+          });
+          this.templateFilter();
+        } else {
+          console.warn("Failed to fetch templates:", response.message);
+          wx.showToast({ title: "获取模板列表失败", icon: "none" });
+        }
+      } catch (error) {
+        console.error("Error fetching templates:", error);
+        wx.showToast({ title: "获取模板列表失败", icon: "none" });
+      } finally {
+        this.isLoading = false;
+      }
+    },
+    toggle() {
+      if (this.data.noTemplate) return
+      this.setData({
+        show: !this.data.show,
+      });
+    },
+    templateFilter() {
+      if (this.chatTemplate) {
+        const { craftType, label, styleId } = this.chatTemplate
+        const allTemplates = this.data.templates
+
+        // 如果指定了styleId，找到对应的模板
+        if (styleId) {
+          const matchedTemplate = allTemplates.find(t => t.styleId === styleId);
+          if (matchedTemplate) {
+            this.triggerEvent('templateChange', matchedTemplate);
+          }
+          return
+        }
+
+        // 如果是"圆形纪念币"且"平雕"，禁用选择器
+        if (label === TemplateLabel.FlatCoin) {
+          this.setData({
+            noTemplate: true
+          })
+          return
+        }
+
+        // 根据工艺类型过滤模板
+        if (craftType && craftType.includes('平雕')) {
+          const filteredTemplates = allTemplates.filter((template) =>
+            template.craftType && template.craftType.includes('平雕')
+          );
+          this.setData({
+            templates: filteredTemplates,
+          });
+        } else {
+          this.setData({
+            templates: allTemplates,
+          });
+        }
+      }
+    },
+    closeTemplateSelector() {
+      this.setData({
+        show: false,
+      });
+    },
+    onTemplateClick(e) {
+      const item = e.currentTarget.dataset.item;
+      this.triggerEvent('templateChange', item);
+      this.toggle();
+    }
+  }
+})
+</script>
+
+<style>
+.mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999;
+  background: transparent;
+}
+
+.template-container {
+  overflow-y: auto;
+  animation: slideIn 0.1s ease-out forwards;
+  z-index: 1000;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.template-container::-webkit-scrollbar {
+  display: none;
+}
+
+.template-item {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 32rpx;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.2s ease;
+}
+
+.template-item:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.image-container {
+  width: 100%;
+  aspect-ratio: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.template-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.template-name {
+  padding: 16rpx;
+  text-align: left;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 500;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10rpx);
+}
+</style>

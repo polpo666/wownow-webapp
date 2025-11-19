@@ -1,0 +1,281 @@
+<template>
+  <view class="rounded-lg text-white text-[13px] flex justify-center items-center px-2 py-1 gap-2"
+    style="border: 1px solid #575757;" bindtap="toggle">
+    <image class="w-23rpx h-23rpx" src="../../assets/prompt.png" mode="aspectFill" />
+    提示词
+  </view>
+  <van-popup show="{{ show }}" bind:close="onClose" z-index="99999">
+    <view class="flex flex-col h-screen w-screen">
+      <bg />
+      <nav-bar isBack="true" title="选择提示词" defaultBackBehavior="{{ false }}" bind:back="toggle" />
+      <!-- tabs -->
+      <van-tabs active="{{ mainCategory }}" bind:change="onTabChange">
+        <van-tab wx:for="{{ promptTags }}" wx:key="index" wx:for-item="tag" wx:for-index="index" name="{{ tag.key }}"
+          title="{{ tag.category }}">
+        </van-tab>
+      </van-tabs>
+      <!-- search -->
+      <view class="search">
+        <image class="search-icon" src="../../assets/search.png" />
+        <van-field class="search-field" value="{{ searchPrompt }}" bind:change="onSearchChange" placeholder="搜索提示词"
+          input-align="left" />
+        <!-- <view wx:if="{{ searchPrompt && searchResult.length > 0 }}" class="search-result">
+          <view wx:for="{{ searchResult }}" wx:key="index" wx:for-item="item" wx:for-index="index"
+            bind:tap="onSearchResultClick(item)">
+            {{ item.name }}
+          </view>
+        </view> -->
+      </view>
+      <!-- mainCategoryItems -->
+      <view class="px-2 flex  flex-wrap gap-2 mt-2">
+        <van-button wx:for="{{ mainCategoryItems }}" wx:key="index" size="small" wx:for-item="item" wx:for-index="index"
+          custom-style="{{ item.key === subCategory.key ? '--button-border-radius: 18rpx; --button-default-background-color: #FADA39; --button-default-border-color: #FADA39; --button-default-color: #0A0A0A;' : '--button-border-radius: 18rpx; --button-default-background-color: rgba(255, 255, 255, 0.1); --button-default-border-color: transparent; --button-default-color: white;' }}"
+          bind:click="onSubCategoryClick" data-item="{{ item }}">{{ item.category }}</van-button>
+      </view>
+      <!-- subCategoryItems -->
+      <view class="flex-1 bg-[#262626] py-2 m-3 rounded-xl overflow-auto" wx:if="{{ searchPrompt }}">
+        <view wx:if="{{ searchResult.length > 0 }}" class="flex max-h-full flex-wrap gap-2 overflow-auto">
+          <view class="px-2 flex flex-wrap gap-2">
+            <van-button wx:for="{{ searchResult }}" wx:key="index" size="small" wx:for-item="item" wx:for-index="index"
+              bind:click="onPromptClick(item)"
+              custom-style="{{ item.isSelected ? '--button-border-radius: 18rpx; --button-default-background-color: rgba(252,223,76,.2); --button-default-border-color: #FADA39; --button-default-color: #FADA39;' : '--button-border-radius: 18rpx; --button-default-background-color: rgba(255, 255, 255, 0.1); --button-default-border-color: transparent; --button-default-color: white;' }}">{{
+                item.name }}</van-button>
+          </view>
+        </view>
+        <view wx:else class="h-full flex flex-col items-center justify-center">
+          <image src="../../assets/base/no-data.png" class="w-180rpx h-180rpx mb-12rpx" mode="aspectFit" />
+          <text class="text-white text-28rpx my-16rpx">暂无结果</text>
+          <text class="text-gray-400 text-24rpx">请尝试其他搜索词</text>
+        </view>
+      </view>
+      <view class="flex-1 bg-[#262626] py-2 m-3 rounded-xl overflow-auto"
+        wx:elif="{{ subCategoryItems && subCategoryItems.length > 0 }}">
+        <view class="flex max-h-full flex-wrap gap-2 overflow-auto">
+          <view class="px-2 flex flex-wrap gap-2">
+            <van-button wx:for="{{ subCategoryItems }}" wx:key="index" size="small" wx:for-item="item"
+              wx:for-index="index" bind:click="onPromptClick(item)"
+              custom-style="{{ item.isSelected ? '--button-border-radius: 18rpx; --button-default-background-color: rgba(252,223,76,.2); --button-default-border-color: #FADA39; --button-default-color: #FADA39;' : '--button-border-radius: 18rpx; --button-default-background-color: rgba(255, 255, 255, 0.1); --button-default-border-color: transparent; --button-default-color: white;' }}">{{
+                item.name }}</van-button>
+          </view>
+        </view>
+      </view>
+      <!-- selectedPromptList -->
+      <!-- <view class="m-[15px] bg-[#232323] h-30 rounded-2xl flex flex-col absolute bottom-2 left-0 right-0"> -->
+      <view class="bg-[#232323] h-30 rounded-2xl flex flex-col mx-3 mt-auto mb-4">
+        <view class="flex-1 flex flex-wrap gap-2 p-3 overflow-auto">
+          <van-button wx:for="{{ selectedPromptList }}" wx:key="index" size="small" wx:for-item="item"
+            wx:for-index="index" bind:click="onPromptClick(item)"
+            custom-style="--button-border-radius: 18rpx; --button-default-background-color: rgba(252,223,76,.2); --button-default-border-color: #FADA39; --button-default-color: #FADA39;">
+            <view class="flex items-center justify-between">
+              {{ item.name }}
+              <van-icon name="cross" size="16" class="ml-1" color="#FADA39" bind:click="onPromptClick(item)" />
+            </view>
+          </van-button>
+        </view>
+        <van-button size="small" bind:click="confirm" class="self-end m-2"
+          custom-style="--button-border-radius: 18rpx; --button-default-background-color: #FADA39; --button-default-border-color: #FADA39; --button-default-color: #0A0A0A;">
+          完成
+        </van-button>
+      </view>
+    </view>
+  </van-popup>
+</template>
+
+
+<script>
+import { createComponent } from "@mpxjs/core";
+import promptTags from "../../../public/tags/index.js";
+
+const flatPromptTags = [];
+promptTags.forEach((item) => {
+  item.items.forEach((item) => {
+    flatPromptTags.push(...item.items)
+  })
+})
+
+createComponent({
+  data: {
+    show: false,
+    promptTags,
+    mainCategory: promptTags[0].key,
+    mainCategoryItems: promptTags[0].items,
+    subCategory: promptTags[0].items[0],
+    subCategoryItems: promptTags[0].items[0].items,
+    promptList: [],
+    flatPromptTags,
+    selectedPromptList: [],
+    searchPrompt: "",
+    searchResult: []
+  },
+  onShow() {
+    this.updateSubCategoryItemsSelection();
+  },
+  methods: {
+    onSearchChange(e) {
+      const result = flatPromptTags.filter((item) => item.name.includes(e.detail));
+      const resultWithSelection = result.map(item => ({
+        ...item,
+        isSelected: this.data.selectedPromptList.find((i) => i.prompt === item.prompt) !== undefined
+      }));
+      this.setData({
+        searchPrompt: e.detail,
+        searchResult: resultWithSelection,
+      });
+    },
+    onSearchResultClick(item) {
+      this.setData({
+        searchPrompt: "",
+        searchResult: [],
+      });
+      this.onPromptClick(item);
+    },
+    toggle() {
+      this.setData({
+        show: !this.data.show,
+      });
+    },
+    onClose() {
+      this.setData({
+        show: false,
+      });
+    },
+    onTabChange(e) {
+      const { name } = e.detail;
+      this.setData({
+        mainCategory: name,
+        mainCategoryItems: promptTags.find((item) => item.key === name).items,
+        subCategory: promptTags.find((item) => item.key === name).items[0],
+        subCategoryItems: promptTags.find((item) => item.key === name).items[0].items,
+      });
+      this.updateSubCategoryItemsSelection();
+    },
+    onSubCategoryClick(e) {
+      const item = e.currentTarget.dataset.item;
+      this.setData({
+        subCategory: item,
+        subCategoryItems: item.items || [],
+        promptList: item.items || [],
+      });
+      this.updateSubCategoryItemsSelection();
+    },
+    onPromptClick(prompt) {
+      const index = this.data.selectedPromptList.findIndex(
+        (i) => i.prompt === prompt.prompt
+      );
+      if (index === -1) {
+        this.setData({
+          selectedPromptList: [...this.data.selectedPromptList, prompt],
+        });
+      } else {
+        this.setData({
+          selectedPromptList: this.data.selectedPromptList.filter(
+            (i) => i.prompt !== prompt.prompt
+          ),
+        });
+      }
+      this.updateSubCategoryItemsSelection();
+      this.updateSearchResultSelection();
+    },
+    updateSubCategoryItemsSelection() {
+      const updatedSubCategoryItems = this.data.subCategoryItems.map(item => ({
+        ...item,
+        isSelected: this.data.selectedPromptList.find((i) => i.prompt === item.prompt) !== undefined
+      }));
+      this.setData({
+        subCategoryItems: updatedSubCategoryItems
+      });
+    },
+    updateSearchResultSelection() {
+      if (this.data.searchResult && this.data.searchResult.length > 0) {
+        const updatedSearchResult = this.data.searchResult.map(item => ({
+          ...item,
+          isSelected: this.data.selectedPromptList.find((i) => i.prompt === item.prompt) !== undefined
+        }));
+        this.setData({
+          searchResult: updatedSearchResult
+        });
+      }
+    },
+    confirm() {
+      this.triggerEvent('changed', this.data.selectedPromptList);
+      this.toggle();
+    },
+
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "nav-bar": "../../components/nav-bar",
+    "van-popup": "@vant/weapp/popup/index",
+    "van-tab": "@vant/weapp/tab/index",
+    "van-tabs": "@vant/weapp/tabs/index",
+    "van-cell-group": "@vant/weapp/cell-group/index",
+    "van-field": "@vant/weapp/field/index",
+    "van-icon": "@vant/weapp/icon/index",
+    "van-button": "@vant/weapp/button/index"
+  },
+  "component": true
+}
+</script>
+
+<style scoped>
+.search {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px;
+  border-radius: 40rpx;
+  background-color: #313131;
+  padding: 0 30rpx;
+  position: relative;
+}
+
+.search-result {
+  width: 100%;
+  max-height: 400rpx;
+  overflow-y: auto;
+  position: absolute;
+  color: white;
+  top: 90rpx;
+  left: 0;
+  z-index: 9;
+  background-color: #313131;
+  color: white;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8rpx;
+}
+
+.search-result view {
+  padding: 10rpx 20rpx;
+  border-bottom: 1px solid #5a5a68;
+}
+
+.search-icon {
+  width: 30rpx;
+  height: 30rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #5a5a68;
+  margin-right: 10rpx;
+}
+
+.search-field {
+  flex: 1;
+  border-bottom: none;
+}
+
+.search-field .van-cell {
+  padding: 4px;
+  background: transparent;
+  border-bottom: none;
+}
+
+.search-field input {
+  color: white;
+}
+</style>

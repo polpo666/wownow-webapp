@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import MobileDemo from './components/MobileDemo.vue'
+import { RouterView } from 'vue-router'
+import TabbarLayout from '@/layouts/tabbar-layout.vue'
 </script>
 
 <template>
-  <MobileDemo />
+  <TabbarLayout>
+    <RouterView />
+  </TabbarLayout>
 </template>
 
 <style>
@@ -19,6 +22,7 @@ body {
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: #000;
 }
 
 #app {

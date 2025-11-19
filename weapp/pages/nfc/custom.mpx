@@ -1,0 +1,318 @@
+<template>
+  <bg />
+  <view class="h-screen flex flex-col pb-[env(safe-area-inset-bottom)]">
+    <nav-bar title="创造展示页" isBack="true" defaultBackBehavior="{{ false }}" bind:back="handleBack" />
+    <view class="flex-1 overflow-auto flex flex-col">
+      <!-- 主内容区域 -->
+      <view class="z-1 flex-1 flex items-center justify-center px-30rpx py-80rpx">
+        <!-- 卡片容器 -->
+        <view class="z-0 w-full relative">
+          <view class="w-[87%] h-450rpx bg-[#3F3F3F] absolute -top-1 left-1/2 -translate-x-1/2 rounded-48rpx rotate-[5deg] -z-10" />
+          <view class="w-[87%] h-450rpx bg-[#3F3F3F] absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-48rpx rotate-[5deg] -z-10" />
+          <view class="h-1000rpx nfc-bg bg-[#4634DF] py-96rpx rounded-48rpx flex flex-col justify-center items-center gap-32rpx">
+            <!-- 文本输入区域 -->
+            <textarea 
+              value="{{ textValue }}" 
+              bindinput="handleTextChange" 
+              placeholder="说点什么展示"
+              class="w-full px-96rpx bg-transparent outline-none text-white placeholder:text-white/55 resize-none text-32rpx font-semibold"
+              maxlength="{{ 1024 }}" 
+              rows="{{ 6 }}"
+            />
+            <!-- 媒体文件区域 -->
+            <view wx:if="{{ mediaType === 'image' }}" class="w-full">
+              <preview-attachment
+                attachments="{{ attachments }}" 
+                uploadQueue="{{ uploadQueue }}"
+                bind:delete="handleDelete"
+                bind:select="onShowActionSheet"
+              />
+            </view>
+            <view wx:elif="{{ mediaType === 'video' }}" class="w-full px-48rpx">
+              <video-player attachment="{{ attachments[0] }}" bind:delete="handleDelete" />
+            </view>
+            <view wx:else class="w-full">
+              <preview-attachment
+                attachments="{{ [] }}" 
+                uploadQueue="{{ uploadQueue }}"
+                bind:delete="handleDelete"
+                bind:select="onShowActionSheet"
+                wx:if="{{ uploadQueue.length > 0 }}"
+              />
+              <view wx:else class="w-60vw aspect-square mx-auto pt-32rpx">
+                <nfc-upload-button bind:upload="onShowActionSheet" />
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+      <!-- 底部按钮 -->
+      <view class="p-32rpx relative z-0">
+        <van-button 
+          type="primary"
+          custom-class="w-full {{ disabled && '!bg-#7A7A7A !border-#7A7A7A !text-#A6A6A6 !opacity-100' }}"
+          bindtap="handleComplete" 
+          disabled="{{ disabled }}"
+        >
+          完成
+        </van-button>
+      </view>
+    </view>
+  </view>
+
+  <van-action-sheet 
+    show="{{ showActionSheet }}" 
+    actions="{{ actions }}"
+    cancel-text="取消"  
+    bind:close="onClose" 
+    bind:select="onSelect"
+    bind:cancel="onClose"
+  />
+</template>
+
+<script lang="ts">
+import { createPage } from "@mpxjs/core";
+import { Attachment, NfcUploadFile } from "@/types";
+import { ossUploadPresign, uploadToOSS } from "@/api/upload";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { useProduceStore } from "@/store";
+import { MIME_TYPE_MAP } from "@/lib/constants";
+
+createPage({
+  data: {
+    textValue: "",
+    attachments: [] as Attachment[],
+    uploadQueue: [] as Array<string>,
+    showActionSheet: false,
+    actions: [
+      { id: 1, name: "上传图片", subname: "从相册选择" },
+      { id: 2, name: "上传视频", subname: "从相册选择" },
+    ],
+  },
+  computed: {
+    ...mapState(useProduceStore, ['nfcContent']),
+    disabled() {
+      return this.attachments.length === 0;
+    },
+    mediaType() {
+      return this.attachments.length > 0
+        ? this.attachments[0].contentType.split("/")[0]
+        : "";
+    },
+    remainingImageCount() {
+      return Math.max(0, 5 - this.attachments.length - this.uploadQueue.length);
+    }
+  },
+  onLoad() {
+    // 从 store 中恢复链接内容
+    if (this.nfcContent && this.nfcContent.type === "custom") {
+      this.setData({
+        textValue: this.nfcContent.text || "",
+        attachments: this.nfcContent.attachments || [],
+      });
+    }
+  },
+  methods: {
+    ...mapActions(useProduceStore, ['setNfcContent', 'saveToStorage']),
+
+    onShowActionSheet() {
+      this.setData({ showActionSheet: true });
+    },
+
+    onClose() {
+      this.setData({ showActionSheet: false });
+    },
+
+    onSelect(e: any) {
+      const { id } = e.detail;
+      if (id === 1) {
+        this.handleSelectMedia("image", this.remainingImageCount);
+      } else if (id === 2) {
+        this.handleSelectMedia("video", 1);
+      }
+    },
+
+    handleSelectMedia(mediaType: "image" | "video", count: number = 1) {
+      wx.chooseMedia({
+        count,
+        mediaType: [mediaType],
+        sourceType: ["album"],
+        success: (mediaRes) => {
+          const tempFiles = mediaRes.tempFiles;
+          const maxSize = 50 * 1024 * 1024;
+          
+          const files: NfcUploadFile[] = [];
+
+          for (const tempFile of tempFiles) {
+            if (tempFile.size > maxSize) {
+              wx.showToast({ title: "文件大小应小于 50MB", icon: "none", duration: 2000 });
+              continue;
+            }
+
+            const { fileType, tempFilePath, thumbTempFilePath, size } = tempFile;
+
+            const fileExtension = tempFilePath.substring(tempFilePath.lastIndexOf("."));
+            const filename = tempFilePath.split("/").pop() || `file-${Date.now()}${fileExtension}`;
+            let contentType = MIME_TYPE_MAP[fileExtension] || `${fileType}/${fileExtension.replace(".", "")}`;
+
+            const selectedFile: NfcUploadFile = {
+              name: filename,
+              type: fileType,
+              contentType: contentType,
+              size,
+              tempFilePath,
+              ...(thumbTempFilePath ? { thumbTempFilePath } : {}),
+            };
+            files.push(selectedFile);
+          }
+
+          if (files.length === 0) return;
+
+          this.handleFileChange(files);
+        },
+        fail: (err) => {
+          if (err.errMsg !== "chooseMedia:fail cancel") {
+            wx.showToast({
+              title: `选择${mediaType === "image" ? "图片" : "视频"}失败`,
+              icon: "none",
+            });
+          }
+        },
+      });
+    },
+
+    handleBack() {
+      const originalText = this.nfcContent?.text || "";
+      const currentAttachments = JSON.stringify(this.data.attachments)
+      const originalAttachments = JSON.stringify(this.nfcContent?.attachments || []);
+
+      if (this.data.textValue.trim() !== originalText || currentAttachments !== originalAttachments) {
+        wx.showModal({
+          content: "当前内容未保存，确认返回？",
+          success: (res) => {
+            if (res.confirm) {
+              wx.navigateBack();
+            }
+          },
+        });
+      } else {
+        wx.navigateBack();
+      }
+    },
+
+    handleTextChange(e: WechatMiniprogram.Input) {
+      this.setData({ textValue: e.detail.value });
+    },
+
+    async handleFileChange(files: NfcUploadFile[]) {
+      const isImage = files[0].type === "image";
+      if (isImage) {
+        if (this.data.attachments.length >= 5) {
+          wx.showToast({ title: "最多支持上传5张图片", icon: "none", duration: 2000 });
+          return;
+        }
+        this.setData({ uploadQueue: files.map((file) => file.name) });
+      } else {
+        this.setData({ attachments: [], uploadQueue: [files[0].name] });
+      }
+
+      try {
+        const uploadPromises = files.map((file) => this.uploadFile(file));
+        const uploadedAttachments = await Promise.all(uploadPromises);
+        const successfullyUploadedAttachments = uploadedAttachments.filter(
+          (attachment) => attachment !== null,
+        ) as Attachment[];
+        this.setData({
+          attachments: isImage
+            ? [...this.data.attachments, ...successfullyUploadedAttachments]
+            : successfullyUploadedAttachments,
+        });
+      } catch (error) {
+        console.error("Error uploading files!", error);
+        const errorMessage = error?.message || "上传失败，请重试";
+        wx.showToast({ title: errorMessage, icon: "none", duration: 2000 });
+      } finally {
+        this.setData({ uploadQueue: [] });
+      }
+    },
+
+    async uploadFile(file: NfcUploadFile): Promise<Attachment | null> {
+      const { tempFilePath, size, name, contentType } = file;
+      try {
+        // 获取预签名URL
+        const presignResponse = await this.getPresignedUrl(name, contentType, size);
+        // 上传文件到OSS
+        await uploadToOSS(tempFilePath, presignResponse.uploadUrl, presignResponse.contentType);
+        // 返回上传结果
+        return {
+          url: presignResponse.publicUrl,
+          name: presignResponse.originalFilename,
+          contentType: presignResponse.contentType,
+        };
+      } catch (error) {
+        throw new Error(error?.message || "上传失败");
+      }
+    },
+
+    async getPresignedUrl(filename: string, contentType: string, size: number) {
+      const response = await ossUploadPresign({ filename, contentType, size });
+      if (response.code !== 0 || !response.data) {
+        throw new Error(response.message || "获取OSS上传凭证失败");
+      }
+      return response.data;
+    },
+
+    handleDelete(e: WechatMiniprogram.CustomEvent) {
+      const urlToDelete = e.detail.url;
+      const updatedAttachments = this.data.attachments.filter(
+        (att) => att.url !== urlToDelete
+      );
+      this.setData({ attachments: updatedAttachments });
+    },
+
+    handleComplete() {
+      if (this.attachments.length === 0) {
+        wx.showToast({ title: "请至少上传一张图片或一个视频", icon: "none" });
+        return;
+      }
+      if (this.uploadQueue.length > 0) {
+        wx.showToast({ title: '请等待文件上传完成', icon: 'none' });
+        return;
+      }
+      // 保存链接内容到 store
+      if (!this.disabled) {
+        this.setNfcContent({
+          type: "custom",
+          link: "",
+          text: this.data.textValue.trim(),
+          attachments: this.data.attachments,
+        });
+        // 保存到本地存储
+        this.saveToStorage();
+        wx.navigateBack();
+      }
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-action-sheet": "@vant/weapp/action-sheet/index",
+    "nfc-upload-button": "./components/nfc-upload-button",
+    "video-player": "./components/video-player",
+    "preview-attachment": "./components/preview-attachment",
+  }
+}
+</script>
+
+<style>
+.nfc-bg {
+  background-size: contain;
+  background-position: top right;
+  background-repeat: no-repeat;
+  background-image: url("../../../public/images/bg-nfc.png");
+}
+</style>

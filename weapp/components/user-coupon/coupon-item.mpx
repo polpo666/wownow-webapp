@@ -1,0 +1,137 @@
+<template>
+  <view class="bg-[#fefbee] rounded-32rpx overflow-hidden p-30rpx relative">
+    <view wx:if="{{ coupon.status !== 'unused' }}" class="absolute inset-0 bg-white/50 rounded-32rpx z-100"></view>
+
+    <view class="absolute top-0 right-0 w-[39%]">
+      <image src="../../assets/user/bg-coupon-card.png" mode="widthFix" class="w-full" />
+    </view>
+
+    <view class="relative flex items-center">
+      <view class="bg-[#ffeff2] rounded-32rpx overflow-visible w-160rpx h-160rpx flex items-center justify-center relative">
+        <!-- 满减券显示金额 -->
+        <view wx:if="{{ coupon.type === 'cash' }}" class="text-#EE3154 text-center">
+          <text class="text-28rpx">¥</text>
+          <text class="font-semibold leading-80rpx" style="font-size: {{ amountFontSize }}rpx;">{{ coupon.discountAmount }}</text>
+          <view class="text-24rpx font-medium">满{{ coupon.thresholdAmount }}可用</view>
+        </view>
+
+        <!-- 折扣券显示百分比 -->
+        <view wx:elif="{{ coupon.type === 'discount' }}" class="text-#EE3154 text-center">
+          <text class="text-40rpx font-semibold">{{ coupon.discountRate / 10 }}折券</text>
+        </view>
+
+        <!-- 免单券显示免费 -->
+        <view wx:elif="{{ coupon.type === 'free' }}" class="text-#EE3154 text-center">
+          <text class="text-40rpx font-semibold">免费券</text>
+        </view>
+      </view>
+
+      <view class="flex-1 px-16rpx">
+        <text class="text-32rpx text-#0D0D0D font-medium break-all">{{ coupon.name }}</text>
+        <view class="text-#787878 text-24rpx">
+          <text wx:if="{{ isValid }}">{{ formatValidEnd }}过期</text>
+          <text wx:elif="{{ !isValid }}">{{ formatValidStart }}可用</text>
+        </view>
+        <view class="text-#787878 active:opacity-80" bind:tap="onClickRule">
+          <text class="text-26rpx mr-6rpx">活动规则</text>
+          <van-icon name="arrow" size="12" />
+        </view>
+      </view>
+
+      <van-button
+        disabled="{{ coupon.status !== 'unused' || !isValid }}"
+        type="primary"
+        custom-class="!rounded-20rpx !border-none !h-84rpx !py-16rpx !px-24rpx !font-medium !text-32rpx {{ coupon.status === 'unused' && isValid ? '!bg-#0D0D0D !text-white' : '!bg-#D4D4D4 !text-#F0F0F0 !opacity-100' }}"
+        bind:click="handleUseCoupon"
+      >
+        {{ couponStatusLabel }}
+      </van-button>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { UserCoupon } from "@/types";
+import { createComponent } from "@mpxjs/core";
+
+createComponent({
+  properties: {
+    coupon: {
+      type: Object,
+      value: {} as UserCoupon,
+    },
+  },
+  data: {},
+  computed: {
+    couponTypeLabel() {
+      switch (this.coupon.type) {
+        case "cash":
+          return "满减券";
+        case "discount":
+          return "折扣券";
+        case "free":
+          return "免单券";
+        default:
+          return "";
+      }
+    },
+    couponStatusLabel() {
+      switch (this.coupon.status) {
+        case "unused":
+          return this.isValid ? "去使用" : "未可用";
+        case "used":
+          return "已使用";
+        case "expired":
+          return "已过期";
+        default:
+          return "";
+      }
+    },
+    isValid() {
+      const today = Date.now();
+      const validStart = new Date(this.coupon.validStart.replace(/-/g, '/')).getTime();
+      return today >= validStart;
+    },
+    formatValidStart() {
+      return this.coupon.validStart ? this.coupon.validStart.slice(0, 16) : "";
+    },
+    formatValidEnd() {
+      return this.coupon.validEnd ? this.coupon.validEnd.slice(0, 16) : "";
+    },
+    amountFontSize() {
+      const amountLength = this.coupon.discountAmount.toString().length;
+      if (amountLength <= 2) {
+        return 64;
+      } else if (amountLength <= 5) {
+        return 40;
+      } else {
+        return 36;
+      }
+    },
+  },
+
+  methods: {
+    handleUseCoupon() {
+      if (this.coupon.status !== "unused") {
+        return;
+      }
+      wx.switchTab({
+        url: "/pages/home/index",
+      });
+    },
+    onClickRule() {
+      this.triggerEvent("showRule", { content: this.coupon.description || "暂无使用说明" });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-icon": "@vant/weapp/icon/index",
+  }
+}
+</script>

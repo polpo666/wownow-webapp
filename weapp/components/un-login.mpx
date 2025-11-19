@@ -1,0 +1,36 @@
+<template>
+  <view class="w-full h-full flex flex-col items-center justify-center py-48rpx text-center">
+    <image src="../assets/base/no-data.png" class="w-240rpx h-240rpx mb-12rpx" mode="aspectFit" />
+    <text class="text-white text-40rpx my-16rpx">未登录</text>
+    <text class="text-gray-400 text-28rpx">{{ tip }}</text>
+    <van-button type="primary" bind:tap="goLogin" class="mt-4">登录</van-button>
+  </view>
+</template>
+
+<script lang="ts">
+import { useAuthStore } from '@/store';
+import { createComponent } from '@mpxjs/core';
+
+createComponent({
+  properties: {
+    tip: {
+      type: String,
+      value: '暂无资产记录'
+    }
+  },
+  methods: {
+    goLogin() {
+      useAuthStore().setShowLoginModal(true);
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+  {
+    "component": true,
+    "usingComponents": {
+      "van-button": "@vant/weapp/button/index"
+    }
+  }
+</script>

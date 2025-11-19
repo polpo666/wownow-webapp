@@ -1,0 +1,220 @@
+<template>
+  <view class="h-full flex flex-col justify-around">
+    <view
+      wx:if="{{ !hasBanner && currentSwiperItem?.recommendCoverUrl }}"
+      class="z-0 fixed left-1/2 -translate-x-1/2 w-[calc(100vw-100rpx)] aspect-square top-16% blur-sm"
+    >
+      <image
+        src="{{ currentSwiperItem.recommendCoverUrl + '?x-oss-process=image/resize,p_20' }}"
+        mode="aspectFit"
+        class="w-full h-full"
+        show-menu-by-longpress="{{ false }}"
+        lazy-load
+      />
+      <view
+        class="absolute inset-0"
+        style="background: linear-gradient(0deg,hsl(0, 0%, 5%) 0%,hsl(0, 0%, 5%, 0) 100%);"
+      />
+    </view>
+
+    <view class="{{ hasBanner ? '' : 'relative z-10 pt-8vw' }}">
+      <swiper
+        current="{{ currentIndex }}"
+        autoplay="{{ autoplay }}"
+        interval="{{ 3000 }}"
+        circular
+        display-multiple-items="{{ 1 }}"
+        previous-margin="{{ hasBanner ? '200rpx' : '140rpx' }}"
+        next-margin="{{ hasBanner ? '200rpx' : '140rpx' }}"
+        bind:change="onSwiperChange"
+        class="{{ hasBanner ? 'h-440rpx' : 'h-80vw' }}"
+      >
+        <swiper-item
+          wx:for="{{ recTemplates }}"
+          wx:key="id"
+          wx:for-item="template"
+          class="w-full h-full overflow-visible pt-32rpx"
+        >
+          <view
+            id="{{ index === currentIndex ? 'rec-templates-active' : 'rec-templates' }}"
+            ref="{{ recTemplatesRef }}"
+            class="w-full h-full flex flex-col rounded-48rpx transition-all ease duration-300 relative {{index === currentIndex ? 'bg-#4634DF scale-100' : 'bg-#2a2a2a scale-85'}}"
+            bind:tap="goTemplateDetail(template.id)"
+          >
+            <view
+              wx:if="{{ template.threeDimensionUrls.length > 0 }}"
+              class="w-full flex-1 transition-all ease-in-out duration-300"
+              style="transform: scale({{ index === currentIndex ? activeScale : '1' }}) translate({{ index === currentIndex ? leftOffset + 'rpx' : '0' }}, {{ topOffset + 'rpx' }});"
+            >
+              <image
+                src="{{ template.threeDimensionUrls[0] + '?x-oss-process=image/resize,p_50' }}"
+                alt="{{ template.name }}"
+                class="w-full h-full"
+                mode="aspectFit"
+                lazy-load
+              />
+            </view>
+
+            <view wx:elif="{{ template.recommendCoverUrl }}" class="w-full flex-1 pt-16rpx">
+              <image
+                src="{{ template.recommendCoverUrl }}"
+                alt="{{ template.name }}"
+                class="w-full h-full"
+                mode="aspectFit"
+                lazy-load
+              />
+            </view>
+
+            <view wx:elif="{{ template.coverUrl }}" class="w-full flex-1 rounded-8rpx overflow-hidden">
+              <image
+                src="{{ template.coverUrl }}"
+                alt="{{ template.name }}"
+                class="w-full h-full"
+                mode="aspectFill"
+                lazy-load
+              />
+            </view>
+            <view class="flex items-center justify-between {{ hasBanner ? 'px-24rpx pt-16rpx pb-24rpx' : 'px-52rpx py-24rpx' }}">
+              <text class="text-white text-26rpx">{{ template.name }}</text>
+              <view class="whitespace-nowrap text-white text-24rpx rounded-16rpx border border-solid !border-white py-4rpx px-12rpx">
+                {{ template.craftType }}
+              </view>
+            </view>
+          </view>
+        </swiper-item>
+      </swiper>
+
+      <view class="flex items-center justify-center {{ hasBanner ? 'pt-16rpx' : 'pt-32rpx' }}">
+        <view class="text-white text-28rpx mr-16rpx">点击灵感开始创作</view>
+        <image src="../../public/click.gif" mode="widthFix" class="w-56rpx h-48rpx"></image>
+      </view>
+    </view>
+
+    <view id="start-create" class="px-30rpx pt-48rpx pb-30rpx" bind:tap="onCreate">
+      <image
+        src="../assets/home/create-btn.png"
+        mode="widthFix"
+        class="w-full"
+      ></image>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import mpx, { createComponent } from "@mpxjs/core";
+import { TemplateLabel, WownowTemplate } from "@/types";
+import { mapActions } from "@mpxjs/pinia";
+import { useChatStore, useAuthStore } from "@/store";
+import { getTemplates } from "@/api/template";
+
+const rectLabels = new Set([
+  TemplateLabel.FlatCard,
+  TemplateLabel.ReliefCard,
+  TemplateLabel.NormalCard,
+  TemplateLabel.RedEnvelopeCard,
+]);
+
+createComponent({
+  properties: {
+    hasBanner: {
+      type: Boolean,
+      value: false
+    },
+  },
+  data: {
+    recTemplates: [] as WownowTemplate[],
+    isLoading: false,
+    currentIndex: 0,
+    autoplay: true,
+  },
+  computed: {
+    currentSwiperItem() {
+      return this.recTemplates[this.currentIndex] || null;
+    },
+    leftOffset() {
+      const activeItem = this.recTemplates?.[this.currentIndex];
+      return activeItem && rectLabels.has(activeItem.label) ? 0 : this.hasBanner ? -20 : -30;
+    },
+    topOffset() {
+      return this.hasBanner ? -6 : -10;
+    },
+    activeScale() {
+      return this.hasBanner ? 1.13 : 1.1;
+    },
+  },
+  async created() {
+    getApp().globalData.recTemplatesRef = this;
+    await this.fetchRecTemplates();
+  },
+  pageLifetimes: {
+    show() {
+      this.autoplay = true;
+    },
+    hide() {
+      this.autoplay = false;
+    },
+  },
+  methods: {
+    ...mapActions(useChatStore, ["resetChatStore"]),
+    ...mapActions(useAuthStore, ["setShowLoginModal"]),
+
+    refresh() {
+      this.currentIndex = 0;
+      this.fetchRecTemplates();
+    },
+
+    async fetchRecTemplates() {
+      this.isLoading = true;
+      try {
+        const response = await getTemplates({ pagination: false, isRecommended: 1, status: 1, position: "home_page" });
+        if (response.code === 0 && response.data) {
+          this.recTemplates = response.data.list || [];
+        } else {
+          console.warn("Failed to fetch recommended templates:", response.message);
+          wx.showToast({ title: "加载失败", icon: "none" });
+        }
+      } catch (error) {
+        console.error(error);
+        wx.showToast({ title: "加载失败", icon: "none" });
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    onSwiperChange(event: { detail: { current: number; source?: string } }) {
+      // 只处理用户触摸引起的变化，避免循环更新
+      if (
+        event.detail.source &&
+        event.detail.source !== "" &&
+        this.currentIndex !== event.detail.current
+      ) {
+        this.currentIndex = event.detail.current;
+      }
+    },
+
+    goTemplateDetail(templateId: number) {
+      wx.navigateTo({
+        url: `/subPackages/home/template?id=${templateId}`
+      });
+    },
+
+    onCreate() {
+      this.resetChatStore();
+      if (!mpx.getStorageSync("token")) {
+        this.setShowLoginModal(true);
+      } else {
+        wx.navigateTo({ url: "/pages/create/category" });
+      }
+    },
+  },
+});
+</script>
+
+<style lang="stylus"></style>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {}
+}
+</script>

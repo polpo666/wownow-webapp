@@ -1,6 +1,9 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 
+// 引入 Tailwind CSS
+import './assets/tailwind.css'
+
 // 引入移动端适配
 import './utils/flexible'
 

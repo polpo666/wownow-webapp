@@ -1,0 +1,133 @@
+<template>
+  <van-popup
+    show="{{ show }}"
+    position="bottom"
+    close-on-click-overlay="{{ true }}"
+    bind:close="onClose"
+    custom-class="!bg-transparent"
+  >
+    <view class="w-[calc(100%-60rpx)] rounded-[80rpx] mx-auto mt-8 mb-32rpx relative overflow-hidden">
+      <!-- 顶部装饰图 -->
+      <view class="w-full absolute top-0 left-0 -z-1">
+        <image src="/public/images/bg-login.png" mode="widthFix" class="w-full" />
+      </view>
+      <view class="bg-[#FEFBEE] w-full h-full absolute top-100rpx left-0 -z-2"></view>
+      <!-- 主体内容 -->
+      <view class="px-48rpx py-100rpx">
+        <view class="font-semibold text-52rpx leading-tight text-[#333333] pb-16rpx">
+          请选择你的情绪关键词
+        </view>
+        <view class="font-medium text-28rpx text-[#333333] leading-40rpx">
+          请选择一个情绪关键词，AI将依据情绪关键词每天推送播客语音
+        </view>
+        <view class="flex flex-wrap gap-16rpx py-48rpx">
+          <view
+            wx:for="{{ channelList }}"
+            wx:key="id"
+            wx:for-item="channel"
+            class="px-24rpx py-12rpx rounded-16rpx text-28rpx font-medium text-black {{ channel.id === selectedChannelId ? 'bg-[#FFE60A]' : 'bg-[#EFEFEB]' }}"
+            bindtap="onSelectChannel(channel.id)"
+          >
+            {{ channel.name }}
+          </view>
+        </view>
+        <button bindtap="onConfirm" class="flex justify-center items-center bg-[#0D0D0D] text-white rounded-xl h-94rpx text-32rpx font-medium">
+          选择
+        </button>
+      </view>
+    </view>
+  </van-popup>
+</template>
+
+<script lang="ts">
+import { createComponent } from "@mpxjs/core";
+import { Channel, NfcAgent } from "@/types";
+import { mapState } from "@mpxjs/pinia";
+import { useProduceStore } from "@/store";
+
+createComponent({
+  properties: {
+    show: {
+      type: Boolean,
+      value: false,
+    },
+    agent: {
+      type: Object,
+      value: undefined as NfcAgent | undefined,
+    }
+  },
+  data: {
+    selectedChannelId: "",
+  },
+  computed: {
+    ...mapState(useProduceStore, ["nfcContent"]),
+    
+    channelList() {
+      if (!this.agent) {
+        return [];
+      }
+      if (this.agent.name.includes("情绪电台") && this.agent.metadata) {
+        return this.formatChannels(this.agent.metadata);
+      }
+      return [];
+    }
+  },
+  observers: {
+    'show, agent, nfcContent'(newShow, newAgent, newNfcContent) {
+      if (newShow && newAgent) {
+        let initChannelId = '';
+        // 如果 nfcContent 存在且类型为 agent，从 link 中获取 channelId
+        if (newNfcContent && newNfcContent.type === 'agent' && newNfcContent.link) {
+          const channelId = newNfcContent.link.split('podcast/')[1];
+          if (channelId) {
+            initChannelId = channelId;
+          }
+        }
+        // 使用第一个频道作为默认值
+        if (!initChannelId && this.channelList.length > 0) {
+          initChannelId = this.channelList[0].id;
+        }
+        this.setData({ selectedChannelId: initChannelId });
+      }
+    }
+  },
+  methods: {
+    onClose() {
+      this.triggerEvent("close");
+    },
+    onSelectChannel(id: string) {
+      this.setData({ selectedChannelId: id });
+    },
+    onConfirm() {
+      if (this.data.selectedChannelId === "") {
+        return;
+      }
+      this.triggerEvent("confirm", { channelId: this.data.selectedChannelId });
+      this.onClose();
+    },
+    formatChannels(metadata: string): Channel[] {
+      try {
+        const parsedMetadata = JSON.parse(metadata);
+        if (parsedMetadata.channels && Array.isArray(parsedMetadata.channels)) {
+          return parsedMetadata.channels.sort((a: Channel, b: Channel) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        } else {
+          console.warn("元数据中缺少 channels 字段或格式不正确:", parsedMetadata);
+          return [];
+        }
+      } catch (e) {
+        console.error("解析元数据失败:", e);
+        return [];
+      }
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-popup": "@vant/weapp/popup/index"
+  }
+}
+</script>

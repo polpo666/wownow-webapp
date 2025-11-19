@@ -1,0 +1,455 @@
+<template>
+  <layout bind:loginSuccess="handleRefresh">
+    <bg />
+    <nav-bar isBack="{{ true }}" iconName="{{ backIcon }}" defaultBackBehavior="{{ false }}" bind:back="onBack" />
+
+    <view wx:if="{{ !campaignInfo }}" class="flex flex-col justify-center items-center gap-24rpx h-50vh">
+      <image src="../../assets/base/no-data.png" class="w-180rpx h-180rpx" mode="aspectFit" />
+      <view class="text-28rpx text-#9C9C9C">暂无活动信息</view>
+    </view>
+
+    <block wx:else>
+      <!-- 活动基本信息 -->
+      <view wx:if="{{ campaignInfo.coverImageUrl }}" class="relative">
+        <image src="{{ campaignInfo.coverImageUrl }}" class="w-full" mode="widthFix" />
+        <view class="absolute inset-0"
+          style="background: linear-gradient(0, #000 0.87%, rgba(255, 255, 255, 0) 100.72%);" />
+      </view>
+
+      <view class="py-48rpx px-30rpx">
+        <view class="text-white text-40rpx font-medium break-all">{{ campaignInfo.name }}</view>
+        <view wx:if="{{ campaignInfo.description }}" class="text-white text-28rpx pt-16rpx break-all whitespace-pre-wrap">{{ campaignInfo.description }}</view>
+        <view class="text-white pt-16rpx" wx:if="{{ formattedContent }}">
+          <rich-text nodes="{{formattedContent}}"></rich-text>
+        </view>
+
+        <!-- 优惠券 -->
+        <block wx:if="{{ coupons.length > 0 }}">
+          <block wx:for="{{ coupons }}" wx:key="id" wx:for-item="coupon">
+            <view class="bg-[#fefbee] rounded-32rpx overflow-hidden mt-16rpx p-30rpx relative">
+              <!-- 优惠券背景图 -->
+              <view class="absolute top-0 right-0 w-[39%]">
+                <image src="../../assets/user/bg-coupon-card.png" mode="widthFix" class="w-full" />
+              </view>
+              <view class="relative flex items-center">
+                <view class="bg-[#ffeff2] rounded-32rpx overflow-visible w-160rpx h-160rpx flex items-center justify-center">
+                  <!-- 满减券显示金额 -->
+                  <view wx:if="{{ coupon.type === 'cash' }}" class="text-#EE3154 text-center">
+                    <text class="text-28rpx">¥</text>
+                    <text class="font-semibold leading-80rpx" style="font-size: {{ coupon.amountFontsize }}rpx;">{{ coupon.discountAmount }}</text>
+                    <view class="text-24rpx font-medium">满{{ coupon.thresholdAmount }}可用</view>
+                  </view>
+                  <!-- 折扣券显示百分比 -->
+                  <view wx:elif="{{ coupon.type === 'discount' }}" class="text-#EE3154 text-center">
+                    <text class="text-40rpx font-semibold">{{ coupon.discountRate / 10 }}折券</text>
+                  </view>
+                  <!-- 免单券显示免费 -->
+                  <view wx:elif="{{ coupon.type === 'free' }}" class="text-#EE3154 text-center">
+                    <text class="text-40rpx font-semibold">免费券</text>
+                  </view>
+                </view>
+                <view class="flex-1 px-16rpx gap-16rpx">
+                  <text class="text-32rpx text-#0D0D0D font-medium break-all">{{ coupon.name }}</text>
+                  <view wx:if="{{ coupon.validityType === 'absolute' }}">
+                    <text class="text-26rpx text-#787878">{{ coupon.formattedEndTime }}过期</text>
+                  </view>
+                  <view wx:elif="{{ coupon.validityType === 'relative' }}">
+                    <text class="text-26rpx text-#787878">领取后{{ coupon.validDays }}天内有效</text>
+                  </view>
+                  <view class="text-#787878 active:opacity-80" bind:tap="onClickRuleBtn(coupon.description)">
+                    <text class="text-26rpx mr-6rpx">活动规则</text>
+                    <van-icon name="arrow" size="12" />
+                  </view>
+                </view>
+
+                <van-button 
+                  type="primary"
+                  custom-class="!rounded-20rpx !border-none !h-84rpx !py-16rpx !px-24rpx !font-medium !text-32rpx {{ !isLoggedIn || coupon.getable === CouponGetable.GETABLE ? '!bg-#0D0D0D !text-white' : '!bg-#D4D4D4 !text-#F0F0F0' }}"
+                  bind:click="handleReceiveCoupon" 
+                  data-coupon-id="{{ coupon.id }}"
+                >
+                  领取
+                </van-button>
+              </view>
+            </view>
+          </block>
+
+          <van-button 
+            type="primary" 
+            block
+            custom-class="mt-30rpx !rounded-32rpx !border-none !h-108rpx !text-32rpx {{ !isLoggedIn || receivableCoupons.length > 0 ? '!bg-#FADA39 !text-#0A0A0A' : '!bg-#7A7A7A !text-#9C9C9C' }}"
+            bind:click="handleReceiveAllCoupons"
+          >
+            一键领取
+          </van-button>
+        </block>
+      </view>
+    </block>
+
+    <rule-popup 
+      show="{{ showRulePopup }}" 
+      title="活动规则" 
+      bind:close="onCloseRulePopup"
+    >
+      <view class="text-center text-28rpx py-48rpx text-#7c7c7c break-all whitespace-pre-wrap">{{ ruleContent || "暂无使用说明" }}</view>
+    </rule-popup>
+
+    <rule-popup 
+      show="{{ showResultPopup }}" 
+      title="一键领取结果" 
+      bind:close="onCloseResultPopup"
+    >
+      <view class="py-36rpx">
+        <view class="text-center text-28rpx text-#7c7c7c">成功领取{{ successCount }}张，{{ failureCount }}张失败</view>
+        <view wx:if="{{ failureDetails.length > 0 }}" class="max-h-400rpx overflow-y-auto">
+          <block wx:for="{{ failureDetails }}" wx:key="index">
+            <view class="text-center text-28rpx text-#7c7c7c break-all mt-8rpx">
+              <text class="font-medium">{{ item.couponName }}</text>: {{ item.reason }}
+            </view>
+          </block>
+        </view>
+      </view>
+    </rule-popup>
+  </layout>
+</template>
+
+<script lang="ts">
+import { getCampaignDetail, receiveCoupon } from "@/api/promotion";
+import { useAuthStore } from "@/store";
+import { Campaign, CampaignCoupon, CouponGetable } from "@/types";
+import { createPage } from "@mpxjs/core";
+import { mapState } from "@mpxjs/pinia";
+
+type ExtendedCampaignCoupon = CampaignCoupon & {
+  formattedEndTime?: string;
+  amountFontsize?: number;
+};
+
+type FailureDetail = {
+  couponName: string;
+  reason: string;
+};
+
+createPage({
+  data: {
+    CouponGetable,
+    campaignId: null as number | null,
+    campaignInfo: null as Campaign | null,
+    coupons: [] as ExtendedCampaignCoupon[],
+    showRulePopup: false,
+    ruleContent: '',
+    showResultPopup: false,
+    failureDetails: [] as FailureDetail[],
+    successCount: 0,
+    failureCount: 0,
+  },
+
+  computed: {
+    ...mapState(useAuthStore, ['isLoggedIn']),
+    formattedContent() {
+      if (!this.campaignInfo?.content) return;
+      let content = this.campaignInfo.content;
+      
+      // 处理图片样式
+      content = content.replace(/\<img/gi, '<img style="max-width:100%;height:auto;display:block;"');
+      
+      // 处理 pre 标签的代码块样式
+      content = content.replace(
+        /<pre([^>]*class="[^"]*ql-syntax[^"]*"[^>]*)>/gi, 
+        '<pre$1 style="color:#f8f8f2;font-size:1em;background-color:#23241f;padding:5px 10px;border-radius:3px;overflow:visible;white-space:pre-wrap;">'
+      );
+      
+      // 处理标题标签
+      content = content.replace(/<h1[^>]*>/gi, '<h1 style="font-size:2em;font-weight:bold;margin:0.67em 0;">');
+      content = content.replace(/<h2[^>]*>/gi, '<h2 style="font-size:1.5em;font-weight:bold;margin:0.83em 0;">');
+      content = content.replace(/<h3[^>]*>/gi, '<h3 style="font-size:1.17em;font-weight:bold;margin:1em 0;">');
+      content = content.replace(/<h4[^>]*>/gi, '<h4 style="font-size:1em;font-weight:bold;margin:1.33em 0;">');
+      content = content.replace(/<h5[^>]*>/gi, '<h5 style="font-size:0.83em;font-weight:bold;margin:1.67em 0;">');
+      content = content.replace(/<h6[^>]*>/gi, '<h6 style="font-size:0.67em;font-weight:bold;margin:2.33em 0;">');
+      
+      // 处理段落标签（确保不会误匹配 pre 标签）
+      content = content.replace(/<p(\s[^>]*)?>/gi, '<p$1 style="word-wrap:break-word;">');
+      
+      // 定义 Quill 样式映射
+      const quillStyles = {
+        'ql-size-huge': 'font-size:2.5em;',
+        'ql-size-large': 'font-size:1.5em;',
+        'ql-size-small': 'font-size:0.75em;',
+        'ql-color-white': 'color:#fff;',
+        'ql-color-red': 'color:#e60000;',
+        'ql-color-orange': 'color:#f90;',
+        'ql-color-yellow': 'color:#ff0;',
+        'ql-color-green': 'color:#008a00;',
+        'ql-color-blue': 'color:#06c;',
+        'ql-color-purple': 'color:#93f;',
+        'ql-bg-black': 'background-color:#000;',
+        'ql-bg-red': 'background-color:#e60000;',
+        'ql-bg-orange': 'background-color:#f90;',
+        'ql-bg-yellow': 'background-color:#ff0;',
+        'ql-bg-green': 'background-color:#008a00;',
+        'ql-bg-blue': 'background-color:#06c;',
+        'ql-bg-purple': 'background-color:#93f;',
+        'ql-font-serif': 'font-family:Georgia,Times New Roman,serif;',
+        'ql-font-monospace': 'font-family:Monaco,Courier New,monospace;',
+        'ql-align-center': 'text-align:center;',
+        'ql-align-justify': 'text-align:justify;',
+        'ql-align-right': 'text-align:right;'
+      };
+      
+      // 处理每个 Quill 样式类
+      Object.entries(quillStyles).forEach(([className, inlineStyle]) => {
+        const classRegex = new RegExp(`\\bclass="([^"]*\\s*)?${className}(\\s*[^"]*)?"`,'gi');
+        content = content.replace(classRegex, (match, before = '', after = '') => {
+          const otherClasses = (before + after).trim();
+          // 提取现有的 style 属性
+          const styleMatch = match.match(/style="([^"]*)"/);
+          const existingStyle = styleMatch ? styleMatch[1] : '';
+          const newStyle = existingStyle ? `${existingStyle};${inlineStyle}` : inlineStyle;
+          
+          if (otherClasses) {
+            return `class="${otherClasses}" style="${newStyle}"`;
+          } else {
+            return `style="${newStyle}"`;
+          }
+        });
+      });
+      
+      // 处理换行符
+      content = content.replace(/↵/g, '\n');
+      
+      // 清理多余的空白
+      content = content.replace(/\s+/g, ' ').trim();
+      
+      return content;
+    },
+    receivableCoupons() {
+      return this.coupons.filter(coupon => coupon.getable === CouponGetable.GETABLE);
+    },
+    backIcon() {
+      return getCurrentPages().length > 1 ? 'arrow-left' : 'wap-home-o';
+    }
+  },
+
+  onLoad() {
+    const { id } = this.options;
+    if (id) {
+      this.campaignId = Number(id);
+      this.fetchCampaignDetail(Number(id));   
+    } 
+  },
+
+  methods: {
+    onBack() {
+      if (getCurrentPages().length > 1) {
+        wx.navigateBack();
+      } else {
+        wx.reLaunch({ url: '/pages/home/index' });
+      }
+    },
+
+    getAmountFontSize(amount: number) {
+      const amountLength = amount.toString().length;
+      if (amountLength <= 2) {
+        return 64;
+      } else if (amountLength <= 5) {
+        return 40;
+      } else {
+        return 36;
+      }
+    },
+
+    onClickRuleBtn(content: string) {
+      this.ruleContent = content;
+      this.showRulePopup = true;
+    },
+
+    async fetchCampaignDetail(id: number) {
+      wx.showLoading({ title: '加载中...', mask: true });
+      try {
+        const res = await getCampaignDetail(id);
+        if (res.code === 0 && res.data) {
+          this.campaignInfo = res.data.campaign || null;
+          this.coupons = (res.data.Coupons || []).map(coupon => ({
+            ...coupon,
+            formattedEndTime: this.formatEndTime(coupon.endTime),
+            amountFontsize: this.getAmountFontSize(coupon.discountAmount)
+          } as ExtendedCampaignCoupon));
+        } else {
+          wx.showToast({ title: res.message || "活动详情加载失败", icon: "none" });
+        }
+      } catch (error) {
+        console.error('failed to fetch campaign detail:', error);
+        wx.showToast({ title: '加载失败: ' + (error.errMsg || "未知错误"), icon: "none" });
+      } finally {
+        wx.hideLoading();
+      }
+    },
+
+    async handleRefresh() {
+      if (!this.campaignId) return;
+      await this.fetchCampaignDetail(this.campaignId);
+    },
+
+    checkLoggedIn() {
+      if (!this.isLoggedIn) {
+        wx.showModal({
+          title: '提示',
+          content: '您还未登录，请先登录',
+          confirmText: '登录',
+          cancelText: '取消',
+          success(res) {
+            if (res.confirm) {
+              useAuthStore().setShowLoginModal(true);
+            }
+          }
+        });
+        return false;
+      }
+      return true;
+    },
+
+    async handleReceiveCoupon(event: any) {
+      const couponId = event.currentTarget.dataset.couponId;
+      if (!this.campaignInfo || !couponId || !this.checkLoggedIn()) return;
+
+      wx.showLoading({ title: '加载中...', mask: true });
+      try {
+        const res = await receiveCoupon({
+          campaignId: this.campaignInfo.id || 0,
+          couponTemplateId: couponId,
+        });
+        if (res.code === 0 && res.data?.success) {
+          await this.handleRefresh();
+          wx.showToast({ 
+            title: res.data.msg || "领取成功", 
+            icon: "success" 
+          });
+        } else {
+          wx.showModal({
+            content: res.message || "未知错误",
+            showCancel: false,
+            confirmText: '我知道了'
+          });
+        }
+      } catch (error) {
+        console.error("failed to receive coupon: ", error);
+        wx.showModal({
+            content: '加载失败: ' + (error.errMsg || "未知错误"),
+            showCancel: false,
+            confirmText: '我知道了'
+          });
+      } finally {
+        wx.hideLoading();
+      }
+    },
+
+    async handleReceiveAllCoupons() {
+      if (!this.campaignInfo || !this.checkLoggedIn()) return;
+      if (this.receivableCoupons.length === 0) {
+        wx.showToast({ title: "暂无可领取的优惠券", icon: "none" });
+        return;
+      }
+
+      wx.showLoading({ title: '一键领取中...', mask: true });
+
+      const batchResults = await this.batchReceiveCoupons(this.receivableCoupons);
+
+      wx.hideLoading();
+
+      const { successCount, failureCount, failureDetails } = batchResults;
+
+      if (successCount > 0) {
+        await this.handleRefresh();
+      }
+
+      if (successCount > 0 && failureCount === 0) {
+        wx.showToast({
+          title: `成功领取${successCount}张优惠券`,
+          icon: "success",
+        });
+      } else if (failureCount > 0) {
+        this.successCount = successCount;
+        this.failureCount = failureCount;
+        this.failureDetails = failureDetails;
+        this.showResultPopup = true;
+      } else if (successCount === 0 && failureCount === 0) {
+        wx.showToast({ title: "加载失败，请重试", icon: "none" });
+      }
+    },
+
+    async batchReceiveCoupons(coupons: ExtendedCampaignCoupon[]) {
+      const BATCH_SIZE = 3; // 限制并发数量
+      let successCount = 0;
+      let failureCount = 0;
+      const failureDetails: FailureDetail[] = [];
+      
+      for (let i = 0; i < coupons.length; i += BATCH_SIZE) {
+        const batch = coupons.slice(i, i + BATCH_SIZE);
+        const batchPromises = batch.map(async (coupon) => {
+          try {
+            const res = await receiveCoupon({
+              campaignId: this.campaignInfo!.id || 0,
+              couponTemplateId: coupon.id,
+            });
+            return {
+              success: !!(res.code === 0 && res.data?.success),
+              name: coupon.name,
+              errorMsg: res.message
+            };
+          } catch (error) {
+            return { success: false, name: coupon.name, errorMsg: error.message };
+          }
+        });
+        const batchResults = await Promise.all(batchPromises);
+        // 处理本批次结果
+        batchResults.forEach(result => {
+          if (result.success) {
+            successCount++;
+          } else {
+            failureCount++;
+            failureDetails.push({ couponName: result.name, reason: result.errorMsg || '未知错误' });
+          }
+        });
+        // 批次间添加短暂延迟，避免接口压力
+        if (i + BATCH_SIZE < coupons.length) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+      }
+      return { successCount, failureCount, failureDetails };
+    },
+
+    formatEndTime(endTime: string) {
+      if (!endTime) return "";
+
+      const date = new Date(endTime);
+      if (isNaN(date.getTime())) return endTime;
+
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+
+      return `${year}-${month}-${day} ${hours}:${minutes}`;
+    },
+
+    onCloseResultPopup() {
+      this.showResultPopup = false;
+    },
+
+    onCloseRulePopup() {
+      this.showRulePopup = false; 
+    }
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-icon": "@vant/weapp/icon/index",
+    "rule-popup": "@/components/user-coupon/rule-popup"
+  }
+}
+</script>

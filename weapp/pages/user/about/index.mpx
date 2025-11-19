@@ -1,0 +1,50 @@
+<template>
+  <view>
+    <bg />
+    <nav-bar title="关于WOWNOW" isBack="{{ true }}" />
+    <view class="flex flex-col items-center justify-center mt-200rpx">
+      <image src="../../../assets/user/logo.png" class="w-200rpx h-200rpx mb-20rpx" />
+      <text class="text-28rpx font-400 leading-50rpx text-white">WOWNOW {{ version }}</text>
+    </view>
+    <view class="flex flex-col items-center justify-center text-[#999999] text-24rpx font-400 fixed bottom-44rpx left-0 right-0">
+      <view class="flex items-center justify-center mb-2 gap-2">
+        <text bind:tap="onClickUserAgreement">用户协议</text> |
+        <text bind:tap="onClickPrivacyPolicy">隐私协议</text>
+      </view>
+      <text>版权归广州轻变量信息科技有限公司所有</text>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+
+createPage({
+  data(): Record<string, any> {
+    return {
+      version: ''
+    }
+  },
+  onShow() {
+    // 从全局数据获取版本号
+    const app = getApp();
+    if (app && app.globalData && app.globalData.version) {
+      this.version = app.globalData.version;
+    }
+  },
+  methods: {
+    onClickUserAgreement() {
+      wx.navigateTo({ url: '/subPackages/agreement/user-agreement' });
+    },
+    onClickPrivacyPolicy() {
+      wx.navigateTo({ url: '/subPackages/agreement/privacy-agreement' });
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+  {
+    "usingComponents": {}
+  }
+</script>

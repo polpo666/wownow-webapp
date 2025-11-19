@@ -1,0 +1,140 @@
+<template>
+  <layout>
+    <view class="overflow-y-auto" style="height: {{contentMinHeight}}px;">
+      <bg />
+      <nav-bar title=""/>
+      <view class="flex flex-col items-center justify-center pt-30rpx">
+        <image src="../../assets/user/logo.png" class="w-200rpx h-200rpx mb-20rpx" />
+        <text class="text-36rpx font-500 leading-50rpx text-white">WOWNOW</text>
+      </view>
+      <view class="m-30rpx pt-100rpx rounded-80rpx overflow-hidden relative">
+        <view class="absolute top-0 left-0 w-full -z-1">
+          <image src="../../assets/user/bg.png" mode="widthFix" class="w-full" />
+        </view>
+        
+        <view class="bg-[#fefbee] pb-40rpx px-30rpx">
+          <!-- 用户卡片 -->
+          <view
+            class="border-solid border border-#0D0D0D rounded-32rpx mb-48rpx px-30rpx py-32rpx flex items-center"
+            bindtap="{{isLoggedIn ? 'goProfile' : 'goLogin'}}"
+          >
+            <view class="w-100rpx h-100rpx rounded-full overflow-hidden bg-[#e9e6ff] flex-shrink-0">
+              <image wx:if="{{ isLoggedIn && user?.avatar }}" src="{{ user.avatar }}" mode="aspectFill" class="w-full h-full" />
+              <image wx:else src="../../assets/user/avatar.png" mode="aspectFill" class="w-full h-full " />
+            </view>
+            <view class="flex flex-col ml-32rpx flex-1">
+              <view class="text-28rpx font-semibold text-#0A0A0A">
+                {{ isLoggedIn ? (user?.nickname || '微信用户') : '点击登录' }}
+              </view>
+              <view class="text-24rpx text-#9C9C9C mt-8rpx">
+                {{ isLoggedIn ? ('WowNow' + user?.id) : '登录后获取更多功能信息' }}
+              </view>
+            </view>
+            <van-icon name="arrow" size="20" class="color-black" />
+          </view>
+          <view class="border-solid border border-black rounded-32rpx py-16rpx flex flex-col">
+            <!-- TODO: 优惠券相关的接口对接 -->
+            <view
+              class="mx-30rpx py-28rpx flex justify-between items-center"
+              style="border-bottom: 1px solid #000;"
+              bind:tap="onClickCoupon"
+            >
+              <text class="text-28rpx font-medium text-#0A0A0A">优惠券中心</text>
+              <van-icon name="arrow" size="20" class="color-black" />
+            </view>
+
+            <view
+              class="mx-30rpx py-28rpx flex justify-between items-center "
+              style="border-bottom: 1px solid #000;"
+              bind:tap="onClickPrivacy"
+            >
+              <text class="text-28rpx font-medium text-#0A0A0A">隐私声明</text>
+              <van-icon name="arrow" size="20" class="color-black" />
+            </view>
+
+            <view class="px-30rpx py-28rpx flex justify-between items-center" bind:tap="onClickAbout">
+              <text class="text-28rpx font-medium text-#0A0A0A">关于WOWNOW</text>
+              <van-icon name="arrow" size="20" class="color-black" />
+            </view>
+          </view>
+          <text class="text-24rpx text-[#999] text-center mt-20rpx block">版本:{{ buildVersion }}</text>
+        </view>
+      </view>
+    </view>
+  </layout>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+import { tabSwitcher } from '../../custom-tab-bar/tabbar';
+import { useAuthStore } from '@/store';
+import { mapState, mapActions } from '@mpxjs/pinia';
+import { getScrollContentHeight } from '@/utils/page';
+import { getUserInfo } from '@/api/auth';
+
+createPage({
+  data: {
+    contentMinHeight: 0,
+    buildVersion: process.env.BUILD_VERSION || 'dev'
+  },
+  onShow() {
+    tabSwitcher(this)
+  },
+  onLoad() {
+    // 获取最新的用户信息
+    if (this.isLoggedIn) {
+      this.fetchUserInfo();
+    }
+  },
+  async onReady() {
+    const height = getScrollContentHeight();
+    this.setData({ contentMinHeight: height });
+  },
+  computed: {
+    ...mapState(useAuthStore, ['isLoggedIn', 'user'])
+  },
+  methods: {
+    ...mapActions(useAuthStore, ['updateUserInfo', 'setShowLoginModal']),
+    async fetchUserInfo() {
+      try {
+        const result = await getUserInfo();
+        if (result.code === 0 && result.data) {
+          const userInfo = result.data;
+          this.updateUserInfo(userInfo);
+        } else {
+          console.warn('获取用户信息失败: ', result.message);
+        }
+      } catch (error) {
+        console.error("获取用户信息失败: ", error);
+      }
+    },
+    goProfile() {
+      wx.navigateTo({ url: '/subPackages/user/profile/index' });
+    },
+    goLogin() {
+      this.setShowLoginModal(true);
+    },
+    onClickAbout() {
+      wx.navigateTo({ url: '/subPackages/user/about/index' });
+    },
+    onClickPrivacy(){
+      wx.navigateTo({ url: '/subPackages/agreement/privacy-agreement' });
+    },
+    onClickCoupon(){
+      if (!this.isLoggedIn) {
+        wx.showToast({ title: '请登录后查看优惠券', icon: 'none' });
+        return;
+      }
+      wx.navigateTo({ url: '/subPackages/user/coupon/index' });
+    },
+  }
+})
+</script>
+
+<script type="application/json">
+  {
+    "usingComponents": {
+      "van-icon": "@vant/weapp/icon/index"
+    }
+  }
+</script>

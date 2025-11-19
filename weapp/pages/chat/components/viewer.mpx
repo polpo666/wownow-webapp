@@ -1,0 +1,95 @@
+<template>
+  <van-popup show="{{ show }}" close-on-click-overlay="{{ false }}" custom-class="" bind:close="onClose"
+    z-index="99999">
+    <view class="flex flex-col h-screen w-screen bg-black">
+      <nav-bar isBack="true" title="" defaultBackBehavior="{{ false }}" bind:back="onBack" />
+      <view class="flex gap-2 p-2 w-full" style="overflow-x: scroll; white-space: nowrap; flex-wrap: nowrap;">
+        <view wx:for="{{ outputList }}" wx:key="record_id" wx:if="{{ item.role === 'assistant' && item.imageUrl }}"
+          class="flex justify-center items-center w-[105px] h-[105px] relative rounded-xl flex-shrink-0 overflow-hidden"
+          bind:tap="handleImageClick(item)">
+          <van-icon wx:if="{{ item.imageUrl === currentImageUrl }}" name="checked" size="40rpx"
+            class="absolute top-1 right-1" color="#FADA39" />
+          <image src="{{ item.imageUrl }}" mode="aspectFill" class="w-full h-full" />
+        </view>
+      </view>
+      <view class="flex-1 flex justify-center items-center">
+        <image src="{{ currentImageUrl }}" mode="widthFix" class="w-full h-full" />
+        <text>图片由AI生成</text>
+      </view>
+      <view class="flex gap-2 p-32rpx">
+        <view class="w-[200rpx]">
+          <van-button block custom-class="!bg-[#232323] !border-[#232323] !text-white"
+            bind:click="onBack">返回</van-button>
+        </view>
+        <view class="flex-1 ">
+          <van-button type="primary" block bind:click="handleProduction">绑定终端生产</van-button>
+        </view>
+      </view>
+    </view>
+  </van-popup>
+</template>
+
+<script>
+import { createComponent } from "@mpxjs/core";
+import { mapState, mapActions } from '@mpxjs/pinia';
+import { useProduceStore, useChatStore } from "@/store";
+
+createComponent({
+  properties: {
+    src: {
+      type: String,
+      default: "",
+    },
+    show: {
+      type: Boolean,
+      default: false,
+    }
+  },
+  data: {
+    currentImageUrl: "",
+  },
+  computed: {
+    ...mapState(useChatStore, ['outputList']),
+  },
+  watch: {
+    show: {
+      handler(newVal) {
+        if (newVal) {
+          this.setData({
+            currentImageUrl: this.src || this.outputList.find(item => item.role === 'assistant' && item.imageUrl)?.imageUrl,
+          })
+        }
+      },
+    },
+  },
+  methods: {
+    ...mapActions(useProduceStore, ['setAssetId', 'setProductImageUrl']),
+    onBack() {
+      this.triggerEvent('back')
+    },
+    handleImageClick(item) {
+      this.setData({
+        currentImageUrl: item.imageUrl,
+      })
+    },
+    handleProduction() {
+      this.setAssetId(null);
+      this.setProductImageUrl(this.data.src);
+      wx.navigateTo({
+        url: '/subPackages/produce/index'
+      })
+    }
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-popup": "@vant/weapp/popup/index",
+    "van-button": "@vant/weapp/button/index",
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}
+</script>

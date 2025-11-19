@@ -1,0 +1,29 @@
+<template>
+  <view class="bg-[#2B2B2B] rounded-32rpx overflow-hidden p-30rpx">
+    <view class="flex items-center">
+      <view class="animate-pulse bg-[#404040] rounded-32rpx overflow-visible w-160rpx h-160rpx flex items-center justify-center">
+      </view>
+      <view class="flex-1 px-16rpx">
+        <view class="animate-pulse w-2/3 h-36rpx rounded-32rpx bg-[#404040]"></view>
+        <view class="animate-pulse rounded-16rpx h-28rpx w-full my-16rpx bg-[#404040]"></view>
+        <view class="animate-pulse rounded-16rpx h-28rpx w-1/2 bg-[#404040]"></view>
+      </view>
+      <view class="animate-pulse rounded-20rpx border-none w-144rpx h-84rpx bg-[#404040]"></view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from "@mpxjs/core";
+
+createComponent({
+  data: {},
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {}
+}
+</script>

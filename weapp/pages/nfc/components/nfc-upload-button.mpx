@@ -1,0 +1,43 @@
+<template>
+  <view
+    bind:tap="onUpload"
+    class="border relative flex flex-col items-center justify-center border-dashed border-[#B5AEE6] rounded-[64rpx] w-full h-full"
+  >
+    <view wx:if="{{ showDecoration }}" class="absolute -top-56rpx -right-56rpx w-25% h-25%">
+      <image src="../../../assets/produce/upload-corner-01.png" class="w-full h-full" />
+    </view>
+    <view wx:if="{{ showDecoration }}" class="absolute -bottom-56rpx -left-56rpx w-25% h-25%">
+      <image src="../../../assets/produce/upload-corner-02.png" class="w-full h-full" />
+    </view>
+    <view class="w-31% aspect-square mx-auto mb-2">
+      <image src="../../../assets/produce/upload.png" class="w-full h-full" />
+    </view>
+    <text class="text-[#B5AEE6] text-32rpx font-semibold text-center mb-8rpx">点击上传图片/视频</text>
+    <text class="text-[#9C97BD] text-[22rpx] text-center w-73%">支持格式：图片或视频（JPG / PNG / MP4 / MOV 等）</text>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from "@mpxjs/core";
+
+createComponent({
+  properties: {
+    showDecoration: {
+      type: Boolean,
+      value: true,
+    },
+  },
+  methods: {
+    onUpload() {
+      this.triggerEvent("upload");
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {}
+}
+</script>

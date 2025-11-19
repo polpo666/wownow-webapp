@@ -1,0 +1,150 @@
+<template>
+  <view class="price-info">
+    <!-- 自定义折叠标题 -->
+    <view class="collapse-header" bindtap="toggleCollapse" hover-class="none" hover-stop-propagation="{{ true }}">
+      <text class="title" hover-class="none">价格明细</text>
+      <view class="arrow {{ isExpanded ? 'expanded' : '' }}" hover-class="none">
+        <image class="arrow-icon" src="../../../../assets/arrow.svg" mode="aspectFit" />
+      </view>
+    </view>
+
+    <!-- 折叠内容 -->
+    <view class="collapse-content {{ isExpanded ? 'show' : '' }}">
+      <view class="price-detail-list">
+        <!-- 商品总额 -->
+        <view class="price-detail-item">
+          <text class="label">商品总额</text>
+          <text class="value">¥{{ amount }}</text>
+        </view>
+
+        <!-- 优惠合计 -->
+        <block wx:for="{{ discountList }}" wx:key="key">
+          <view class="price-detail-item">
+            <text class="label">{{ item.label }}</text>
+            <text class="value">减¥{{ item.value }}</text>
+          </view>
+        </block>
+
+        <!-- 实付金额 -->
+        <view class="price-detail-item">
+          <text class="label">实付金额</text>
+          <view class="value">
+            <text class="text-white text-28rpx font-bold">实付款 ¥</text>
+            <text class="text-46rpx font-bold">{{ payAmount }}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core';
+
+createComponent({
+  properties: {
+    // 商品总额
+    amount: {
+      type: Number,
+      value: 0
+    },
+    // 实付金额
+    payAmount: {
+      type: Number,
+      value: 0
+    },
+    discountRecord: {
+      type: Array,
+      value: []
+    }
+  },
+  data: {
+    isExpanded: true, // 默认展开
+  },
+  computed: {
+    discountList(): { key: string; label: string; value: string }[] {
+      const records = Array.isArray(this.discountRecord) ? this.discountRecord : [];
+      return records.map((item: { name?: string; discountAmount?: number | string }, index: number) => {
+        const amount = Number(item?.discountAmount ?? 0);
+        return {
+          key: `${item?.name ?? 'discount'}-${index}`,
+          label: item?.name ?? '优惠',
+          value: amount > 0 ? amount.toFixed(2) : '0.00'
+        };
+      });
+    }
+  },
+  methods: {
+    toggleCollapse() {
+      this.isExpanded = !this.isExpanded;
+    }
+  }
+});
+</script>
+
+<style lang="stylus">
+.price-info
+  overflow hidden
+  margin-top 32rpx
+  border-top 1rpx solid #333
+
+.collapse-header
+  display flex
+  justify-content space-between
+  align-items center
+  cursor pointer
+  padding 20rpx 0
+  padding-top 30rpx
+
+  .title
+    font-size 32rpx
+    font-weight 400
+    color #fff
+
+  .arrow
+    display flex
+    align-items center
+    justify-content center
+    transition transform 0.3s ease
+
+    .arrow-icon
+      width 26rpx
+      height 26rpx
+      transform rotate(180deg)
+      transition transform 0.3s ease
+
+    &.expanded .arrow-icon
+      transform rotate(0deg)
+
+.collapse-content
+  max-height 0
+  overflow hidden
+  transition max-height 0.3s ease
+
+  &.show
+    max-height 1000rpx
+
+.price-detail-list
+  padding 0
+
+.price-detail-item
+  display flex
+  justify-content space-between
+  align-items center
+  padding 16rpx 0
+
+  .label
+    font-size 28rpx
+    color #7a7a7a
+
+  .value
+    font-size 28rpx
+    color #D4D4D4
+    font-weight 500
+</style>
+
+<script type="application/json">
+{
+  "component": true
+}
+</script>

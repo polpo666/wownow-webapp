@@ -1,0 +1,126 @@
+<template>
+  <van-popup show="{{ showLoginModal }}" position="bottom" close-on-click-overlay="{{ true }}"
+    custom-class="bg-transparent" bind:close="onClose" z-index="99999">
+    <view class="rounded-[70rpx] px-0 pt-0 mx-4 mt-8 relative overflow-hidden">
+      <!-- 顶部装饰图 -->
+      <view class="w-full h-110rpx relative overflow-hidden">
+        <image src="/public/images/bg-login.png" class="w-full h-110rpx absolute left-0 top-0 z-10" />
+      </view>
+      <!-- 主体内容 -->
+      <view class="px-32rpx pb-100rpx mb-64rpx bg-[#fcf9ee] rounded-b-[70rpx] overflow-hidden">
+        <view class="font-bold text-60rpx leading-tight text-black mb-8rpx">
+          在 WOWNOW，
+        </view>
+        <view class="font-bold text-60rpx leading-tight text-black mb-16rpx">
+          创作只属于你的作品
+        </view>
+        <view class="text-24rpx text-black leading-40rpx mt-30rpx mb-50rpx">
+          不止是工具，这里是你灵感的归宿，让创意化为独特的纪念。释放灵感，留下只属于你的独特印记
+        </view>
+        <!-- 微信登录按钮 -->
+        <button wx:if="{{ agree }}" open-type="getPhoneNumber"
+          class="flex items-center justify-center bg-black text-white rounded-xl h-96rpx mt-2 mb-24rpx"
+          bindgetphonenumber="onGetPhoneNumber">
+          <!-- <image src="../../../assets/login/wechat.png" class="w-36rpx h-36rpx mr-30rpx" /> -->
+          <text class="text-28rpx font-medium">手机号授权登录</text>
+        </button>
+        <button wx:else
+          class="flex items-center justify-center bg-[#7a7a7a] text-[#999] rounded-xl h-96rpx mt-2 mb-24rpx"
+          bind:tap="onClickLoginWithoutAgree">
+          <!-- <image src="../../../assets/login/wechat.png" class="w-36rpx h-36rpx mr-30rpx" /> -->
+          <text class="text-28rpx font-medium">手机号授权登录</text>
+        </button>
+        <!-- 协议提示 -->
+        <view class="flex items-center justify-center text-center text-20rpx text-[#999] mt-30rpx">
+          <van-checkbox value="{{ agree }}" checked-color="#FADA39"
+            bind:change="onChangeAgree"></van-checkbox>已阅读并同意
+          <text class="text-[#e09c14] mx-4rpx" bind:tap="onClickUserAgreement">《用户协议》</text>
+          与
+          <text class="text-[#e09c14] mx-4rpx" bind:tap="onClickPrivacyPolicy">《隐私政策》</text>
+        </view>
+      </view>
+    </view>
+    <view class="bg-white w-64rpx h-64rpx rounded-full flex items-center justify-center m-auto" bind:tap="onClose">
+      <van-icon name="cross" />
+    </view>
+  </van-popup>
+</template>
+
+<script lang="ts">
+import { login } from '@/api/auth';
+import { useAuthStore } from '@/store';
+import { User } from '@/types';
+import { createComponent } from '@mpxjs/core';
+import { mapState, mapActions } from "@mpxjs/pinia";
+
+createComponent({
+  data: {
+    agree: false,
+  },
+  computed: {
+    ...mapState(useAuthStore, ['showLoginModal']),
+  },
+  methods: {
+    ...mapActions(useAuthStore, ['setShowLoginModal', 'login']),
+    onClose() {
+      this.setShowLoginModal(false)
+      this.triggerEvent && this.triggerEvent('loginCancel')
+    },
+    onSuccess() {
+      this.setShowLoginModal(false)
+      this.triggerEvent && this.triggerEvent('loginSuccess')
+    },
+    onChangeAgree(e: any) {
+      console.log(e.detail)
+      this.agree = e.detail
+    },
+    onClickLoginWithoutAgree() {
+      wx.showToast({ title: '请先阅读并同意用户协议和隐私政策', icon: 'none' })
+    },
+    onClickUserAgreement() {
+      wx.navigateTo({ url: '/subPackages/agreement/user-agreement' })
+    },
+    onClickPrivacyPolicy() {
+      wx.navigateTo({ url: '/subPackages/agreement/privacy-agreement' })
+    },
+    onGetPhoneNumber(e: any) {
+      const { code: phoneCode } = e.detail
+      console.log('phoneCode: ', phoneCode)
+      wx.login({
+        success: (res) => {
+          const { code } = res
+          console.log('code: ', code)
+          login(
+            code, phoneCode
+          ).then((res) => {
+            if (res && res.code === 0 && res.data) {
+              const { token, user, expires_in } = res.data
+              this.login({
+                user: user as User,
+                token: token,
+                expiresIn: expires_in
+              })
+              wx.showToast({ title: '登录成功', icon: 'success' })
+              // wx.navigateBack()
+              this.onSuccess();
+            } else if (res) {
+              wx.showToast({ title: res.message, icon: 'none' })
+            }
+          })
+        }
+      })
+    },
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-popup": "@vant/weapp/popup/index",
+    "van-checkbox": "@vant/weapp/checkbox/index",
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}
+</script>

@@ -1,0 +1,255 @@
+<template>
+  <layout bind:loginSuccess="handleRefreshList">
+    <view class="flex flex-col" style="height: {{contentMinHeight}}px;">
+      <bg />
+      <nav-bar title="我的资产" />
+      <view class="flex-1 overflow-auto">
+        <un-login wx:if="{{ !isLoggedIn }}" tip="您还没有登录，请登录后查看资产" />
+        <scroll-view
+          wx:else
+          class="h-full"
+          scroll-y
+          refresher-enabled
+          refresher-triggered="{{ refresherTriggered }}"
+          refresher-threshold="{{ 45 }}"
+          refresher-default-style="none"
+          bindrefresherrefresh="onRefresh"
+          bindrefresherpulling="onRefresherPulling"
+          bindrefresherrestore="onRefresherRestore"
+          bindscrolltolower="onReachBottom"
+          lower-threshold="100"
+        >
+          <!-- 自定义下拉刷新样式 -->
+          <view slot="refresher" class="flex flex-col items-center justify-center py-32rpx w-full">
+            <view  wx:if="{{ refresherTriggered }}" class="flex items-center justify-center">
+              <view class="w-32rpx h-32rpx border-4rpx border-gray-400 border-t-white rounded-full animate-spin mr-16rpx" />
+              <text class="text-[#D1D5DB] text-28rpx">正在刷新...</text>
+            </view>
+            <view wx:elif="{{ refresherPulling }}" class="w-full text-center">
+              <text class="text-[#D1D5DB] text-28rpx">{{ refresherText }}</text>
+            </view>
+          </view>
+
+          <!-- 初次加载骨架屏 -->
+          <asset-skeleton wx:if="{{ showSkeleton }}" count="{{ 8 }}" />
+
+          <!-- 空状态 -->
+          <asset-empty wx:elif="{{ isEmpty }}" />
+
+          <view wx:else class="p-30rpx">
+            <!-- 资产列表 -->
+            <asset-list  list="{{ assetList }}" bind:itemclick="handleAssetClick" />
+
+            <!-- 加载更多状态 -->
+            <view wx:if="{{ loadingMore }}" class="flex justify-center pt-32rpx pb-20rpx">
+              <view class="flex items-center">
+                <view class="w-24rpx h-24rpx border-4rpx border-gray-600 border-t-white rounded-full animate-spin mr-16rpx" />
+                <text class="text-gray-400 text-26rpx">加载中...</text>
+              </view>
+            </view>
+
+            <!-- 没有更多数据 -->
+            <view wx:elif="{{ noMoreData }}" class="flex justify-center pt-32rpx pb-20rpx">
+              <text class="text-gray-500 text-24rpx">没有更多数据了</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+  </layout>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+import { mapState } from '@mpxjs/pinia';
+
+import { useAuthStore } from '@/store';
+import { tabSwitcher } from '../../custom-tab-bar/tabbar';
+import { getAssetList } from '@/api/asset';
+import { Asset } from '@/types/asset';
+import { getScrollContentHeight } from '@/utils/page';
+
+interface AssetData {
+  assetList: Asset[];
+  isLoading: boolean;
+  refresherTriggered: boolean;
+  refresherPulling: boolean;
+  refresherText: string;
+  refresherRotation: number;
+  loadingMore: boolean;
+  hasMore: boolean;
+  currentPage: number;
+  pageSize: number;
+  total: number;
+  contentMinHeight: number;
+}
+
+createPage({
+  data(): AssetData {
+    return {
+      assetList: [],
+      isLoading: true,
+      refresherTriggered: false,
+      refresherPulling: false,
+      refresherText: '下拉刷新',
+      refresherRotation: 0,
+      loadingMore: false,
+      hasMore: true,
+      currentPage: 1,
+      pageSize: 20,
+      total: 0,
+      contentMinHeight: 0,
+    }
+  },
+
+  computed: {
+    ...mapState(useAuthStore, ['isLoggedIn']),
+    showSkeleton() {
+      return this.isLoading && this.assetList.length === 0;
+    },
+    isEmpty() {
+      return !this.isLoading && this.assetList.length === 0;
+    },
+    noMoreData() {
+      return !this.hasMore && this.assetList.length > 0;
+    }
+  },
+
+  async onReady() {
+    const height = getScrollContentHeight();
+    this.setData({ contentMinHeight: height });
+  },
+
+  onShow() {
+    tabSwitcher(this);
+    if (!this.isLoggedIn) return
+    this.loadAssetList(true);
+  },
+
+  methods: {
+    goProducePage() {
+      wx.navigateTo({ url: '/subPackages/produce/index' })
+    },
+
+    async loadAssetList(isFirstPage = false, showSuccessToast = false) {
+      try {
+        if (isFirstPage) {
+          this.setData({
+            isLoading: true,
+            currentPage: 1,
+            hasMore: true
+          })
+        } else {
+          this.setData({ loadingMore: true })
+        }
+
+        const res = await getAssetList({
+          page: this.currentPage,
+          pageSize: this.pageSize
+        });
+
+        const list = res.data?.list || [];
+        const total = res.data?.totalCount || 0;
+
+        if (res.code === 0) {
+          if (isFirstPage) {
+            this.setData({ assetList: list });
+          } else {
+            this.setData({
+              assetList: [...this.assetList, ...list]
+            });
+          }
+
+          this.setData({
+            total: total,
+            hasMore: this.assetList.length < total
+          });
+
+          if (list.length > 0) {
+            this.setData({ currentPage: this.currentPage + 1 });
+          }
+
+          // 只有在手动下拉刷新时才显示成功提示
+          if (showSuccessToast) {
+            setTimeout(() => {
+              wx.showToast({
+              title: '刷新成功',
+              icon: 'none',
+              duration: 1500
+            });
+            }, 200);
+          }
+        } else {
+          wx.showToast({ title: res.message || '获取资产列表失败', icon: 'none' })
+        }
+      } catch (error) {
+        console.error('加载资产列表失败:', error)
+        wx.showToast({
+          title: '加载失败',
+          icon: 'none'
+        })
+      } finally {
+        this.setData({
+          isLoading: false,
+          loadingMore: false,
+          refresherTriggered: false
+        })
+      }
+    },
+
+    handleRefreshList() {
+      this.loadAssetList(true);
+    },
+
+    // 下拉刷新开始
+    onRefresh() {
+      this.setData({ refresherTriggered: true })
+      this.loadAssetList(true, true);
+    },
+
+    // 下拉过程中
+    onRefresherPulling(e: any) {
+      const { dy } = e.detail;
+      this.setData({
+        refresherPulling: true,
+        refresherRotation: Math.min(dy * 2, 180),
+        refresherText: dy > 45 ? '释放刷新' : '下拉刷新'
+      })
+    },
+
+    // 下拉恢复
+    onRefresherRestore() {
+      this.setData({
+        refresherPulling: false,
+        refresherRotation: 0,
+        refresherText: '下拉刷新'
+      })
+    },
+
+    // 触底加载更多
+    onReachBottom() {
+      if (!this.loadingMore && this.hasMore) {
+        this.loadAssetList(false)
+      }
+    },
+    handleAssetClick(event: any) {
+      const { item } = event.detail;
+
+      wx.navigateTo({
+        url: `/subPackages/history/detail?id=${item.id}`
+      });
+    },
+  }
+})
+</script>
+
+<script type="application/json">
+  {
+    "usingComponents": {
+      "un-login": "@/components/un-login.mpx",
+      "asset-skeleton": "./components/asset-skeleton.mpx",
+      "asset-empty": "./components/asset-empty.mpx",
+      "asset-list": "./components/asset-list.mpx"
+    }
+  }
+</script>

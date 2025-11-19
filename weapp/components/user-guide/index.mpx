@@ -1,0 +1,412 @@
+<template>
+  <view wx:if="{{ show }}" style="--animationTime: {{ animationTime / 1000 }}s;">
+    <view class="mask">
+      <view id="NewUserGuideTop" class="fixed transition-all"
+        style="width: 100vw;height: 100vh;top: calc({{ targetNodeInfo.top - maskPadding }}px - 100vh); left: 0;{{ maskPublicStyle }}">
+      </view>
+      <view id="NewUserGuideRight" class="fixed transition-all"
+        style="width: 100vw;height: {{ targetNodeInfo.height + (maskPadding * 2) }}px;top: {{ targetNodeInfo.top - maskPadding }}px;left: {{ targetNodeInfo.right + maskPadding }}px;{{ maskPublicStyle }}">
+      </view>
+      <view id="NewUserGuideBottom" class="fixed transition-all"
+        style="width: 100vw;height: 100vh;top: {{ targetNodeInfo.bottom + maskPadding }}px;left: 0;{{ maskPublicStyle }}">
+      </view>
+      <view id="NewUserGuideLeft" class="fixed transition-all"
+        style="width: 100vw;height: {{ targetNodeInfo.height + (maskPadding * 2) }}px;top: {{ targetNodeInfo.top - maskPadding }}px;right: calc(100vw - {{ targetNodeInfo.left - maskPadding }}px);{{ maskPublicStyle }}">
+      </view>
+      <view wx:if="{{ !hollowOut }}" class="fixed"
+        style="width: {{ targetNodeInfo.width + (maskPadding * 2) }}px;height: {{ targetNodeInfo.height + (maskPadding * 2) }}px;top: {{ targetNodeInfo.top - maskPadding }}px;left: {{ targetNodeInfo.left - maskPadding }}px;z-index: {{ zIndex }};"
+        bindtap="nextStepOnClickHollowOut">
+      </view>
+
+      <!-- 箭头指示器 -->
+      <image wx:if="{{ currentTipPosition === 'top' }}" src="../../assets/arrow-down.png" class="fixed w-40rpx h-80rpx"
+        style="top: {{ targetNodeInfo.top - maskPadding - 40 }}px;left: {{ targetNodeInfo.left + targetNodeInfo.width / 2 - 10 }}px;z-index: {{ zIndex + 2 }};" />
+      <image wx:if="{{ currentTipPosition === 'bottom' }}" src="../../assets/arrow-up.png" class="fixed w-40rpx h-80rpx"
+        style="top: {{ targetNodeInfo.bottom + maskPadding - 10 }}px;left: {{ targetNodeInfo.left + targetNodeInfo.width / 2 - 30 }}px;z-index: {{ zIndex + 2 }};" />
+    </view>
+    <!-- 提示 + 操作 -->
+    <view id="NewUserGuideTips" class="fixed px-60rpx pt-20rpx transition-all"
+      style="width: 100vw;left: 0;z-index: {{ zIndex + 1 }};box-sizing: border-box;{{ tipsStyle }}">
+      <view
+        class="relative mb-48rpx py-20rpx px-32rpx rounded-32rpx text-black break-words bg-primary text-28rpx font-500 {{ tipsWrapperClass }}">
+        <image wx:if="{{ showGuideIcon }}" src="../../assets/guide-silvery.png"
+          class="absolute -top-[50rpx] -left-[50rpx] w-100rpx h-100rpx" mode="aspectFill" />
+        {{ tips }}
+        <image wx:if="{{ showGuideIcon }}" src="../../assets/guide-gold.png"
+          class="absolute -bottom-[30rpx] -right-[30rpx] w-80rpx h-80rpx" mode="aspectFill" />
+      </view>
+      <view class="flex justify-end">
+        <!-- <view wx:if="{{ currentSelectorIndex !== options.length - 1 }}"
+          class="flex-1 text-center py-15rpx rounded-16rpx text-black {{ endBtnClass }}" bindtap="handleStepEnd">{{
+            jumpAllBtnText }}</view> -->
+        <view style="border: 1px solid white;"
+          class="px-20rpx flex justify-center py-15rpx rounded-18rpx items-center text-24rpx font-500 text-white"
+          bindtap="nextStep">{{
+            currentSelectorIndex !== options.length - 1
+              ? nextBtnText
+              : endBtnText
+          }}</view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { createComponent } from "@mpxjs/core";
+const NEW_USER_GUIDE_COMPLETION_STATUS = "NEW_USER_GUIDE_COMPLETION_STATUS";
+
+const SYSTEM_INFO = wx.getWindowInfo();
+
+const MASK_PADDING = 5;
+
+const mathCeil = (obj) => {
+  const _obj = {};
+  for (const key in obj) {
+    _obj[key] = typeof obj[key] === "number" ? Math.ceil(obj[key]) : obj[key];
+  }
+  return _obj;
+};
+
+let initDelayTimer;
+
+createComponent({
+  options: {
+    addGlobalClass: true,
+  },
+  behaviors: ["wx://component-export"],
+  properties: {
+    pageKey: {
+      // 页面标识，用于区分不同的新手引导
+      type: String,
+      value: "",
+    },
+    /**
+     * 步骤项
+     * @type {{ selector: string, tips: string }[]}
+     * @example
+     * ```js
+     * [
+     *   { selector: '#app1', tips: '第一步' },
+     *   { selector: '#app2', tips: '第二步' }
+     * ]
+     * ```
+     */
+    options: {
+      type: Array,
+      value: [],
+    },
+    hollowOut: {
+      // 是否镂空
+      type: Boolean,
+      value: false,
+    },
+    initDelay: {
+      // 初始化延迟，防止节点还没创建就开始查找节点
+      type: Number,
+      value: 500,
+    },
+    zIndex: {
+      // z-index
+      type: Number,
+      value: 10000,
+      observer() {
+        this.updateMaskStyle();
+      },
+    },
+    animationTime: {
+      // 动画时间
+      type: Number,
+      value: 250,
+    },
+    tipsWrapperClass: {
+      // tips 包裹器 class
+      type: String,
+      value: "",
+    },
+    nextBtnText: {
+      // 下一步按钮文案
+      type: String,
+      value: "下一步",
+    },
+    nextBtnClass: {
+      // 下一步按钮 class
+      type: String,
+      value: "",
+    },
+    endBtnText: {
+      // 结束按钮文案
+      type: String,
+      value: "了解了",
+    },
+    endBtnClass: {
+      // 结束按钮 class
+      type: String,
+      value: "",
+    },
+    jumpAllBtnText: {
+      // 跳过全部按钮文案
+      type: String,
+      value: "全部跳过",
+    },
+    maskPadding: {
+      // 遮罩层内边距
+      type: Number,
+      value: MASK_PADDING,
+    },
+    tipPosition: {
+      // tip显示位置：'bottom' | 'top' | 'auto'
+      type: String,
+      value: 'auto',
+    },
+  },
+  data: {
+    show: false,
+
+    storgeKey: "",
+
+    MASK_PADDING,
+
+    targetNodeInfo: {
+      width: 0,
+      height: 0,
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+    },
+
+    scrollRecordMap: {}, // 滚动记录
+
+    maskPublicStyle: `z-index: 3000;background-image: linear-gradient(90deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.7) 100%);backdrop-filter: blur(1px);`,
+
+    tips: "",
+    showGuideIcon: false,
+    tipsStyle: "",
+    currentTipPosition: 'auto', // 当前步骤的tip位置
+
+    currentSelectorIndex: 0, // 当前步骤节点索引
+  },
+  lifetimes: {
+    ready() {
+      this.updateStorgeKey();
+      this.setData({
+        targetNodeInfo: mathCeil({
+          width: SYSTEM_INFO.windowWidth,
+          height: SYSTEM_INFO.windowHeight,
+          left: 0,
+          right: SYSTEM_INFO.windowWidth,
+          top: 0,
+          bottom: SYSTEM_INFO.windowHeight,
+        }),
+        tipsStyle: `top: ${SYSTEM_INFO.windowHeight}px;`,
+        maskPublicStyle: `z-index: ${this.properties.zIndex};background-image: linear-gradient(90deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.7) 100%);backdrop-filter: blur(1px);`,
+      });
+      this.checkShow();
+    },
+    detached() {
+      clearTimeout(initDelayTimer);
+      initDelayTimer = -1;
+    },
+  },
+  pageLifetimes: {
+    show() {
+      this.updateStorgeKey();
+      this.checkShow();
+    }
+  },
+  export() {
+    return {
+      nextStep: () => this.nextStep(),
+      handleStepEnd: () => this.handleStepEnd(),
+    };
+  },
+  methods: {
+    selectNodeRect(selector, obj = wx) {
+      return new Promise((resolve, reject) => {
+        try {
+          obj
+            .createSelectorQuery()
+            .select(selector)
+            .boundingClientRect((e) => {
+              e !== null ? resolve(e) : reject();
+            })
+            .exec();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    },
+    checkShow() {
+      const obj = wx.getStorageSync(NEW_USER_GUIDE_COMPLETION_STATUS) || {};
+      if (obj[this.data.storgeKey]) {
+        this.setData({ show: false });
+        return;
+      }
+      this.setData({ show: true });
+      initDelayTimer = setTimeout(() => {
+        this.setCurrentTargetNodeInfo();
+      }, this.properties.initDelay);
+    },
+
+    updateMaskStyle() {
+      this.setData({
+        maskPublicStyle: `z-index: ${this.properties.zIndex};background-image: linear-gradient(90deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.3) 100%);backdrop-filter: blur(1px);`,
+      });
+    },
+
+    setCurrentTargetNodeInfo() {
+      if (!this.properties.options.length) return;
+      const item = this.properties.options[this.data.currentSelectorIndex];
+      const { ref } = item;
+      const obj = ref ? getApp().globalData[ref] : wx;
+      this.selectNodeRect(item.selector, obj)
+        .then((e) => {
+          // 如果节点在可视区域下方，需要滚动到可视区域，滚动后仍不可见就不管了
+          if (
+            e.top > SYSTEM_INFO.windowHeight - 20 &&
+            !this.data.scrollRecordMap[this.data.currentSelectorIndex]
+          ) {
+            // 需要滚动到可视区域
+            if (item.scrollViewSelector) {
+              wx.createSelectorQuery()
+                .select(item.scrollViewSelector)
+                .node()
+                .exec((res) => {
+                  const scrollView = res[0].node;
+                  scrollView.scrollIntoView(item.selector);
+                });
+            } else {
+              wx.pageScrollTo({ scrollTop: e.top - 20, duration: 0 });
+            }
+            this.data.scrollRecordMap[this.data.currentSelectorIndex] = true;
+            setTimeout(() => this.setCurrentTargetNodeInfo(), 32);
+            return;
+          }
+          this.triggerEvent("stepChange", {
+            pageKey: this.properties.pageKey,
+            step: this.data.currentSelectorIndex,
+          });
+          this.setData({
+            targetNodeInfo: mathCeil(e),
+            tips: item.tips,
+            showGuideIcon: item.showGuideIcon,
+            currentTipPosition: item.tipPosition || this.properties.tipPosition
+          }, () =>
+            this.setTipsStyle()
+          );
+        })
+        .catch(() => this.nextStep()); // 找不到节点，直接下一步
+    },
+
+    nextStep() {
+      if (
+        this.data.currentSelectorIndex ===
+        this.properties.options.length - 1
+      ) {
+        // 没有下一步了
+        this.handleStepEnd();
+      } else {
+        // 下一步
+        this.setData({
+          currentSelectorIndex: this.data.currentSelectorIndex + 1,
+        });
+        this.setCurrentTargetNodeInfo();
+      }
+    },
+
+    nextStepOnClickHollowOut() {
+      if (
+        this.data.currentSelectorIndex !==
+        this.properties.options.length - 1
+      ) {
+        return
+      }
+      this.nextStep()
+    },
+
+    handleStepEnd() {
+      this.setData({
+        targetNodeInfo: mathCeil({
+          width: SYSTEM_INFO.windowWidth,
+          height: SYSTEM_INFO.windowHeight,
+          left: 0,
+          right: SYSTEM_INFO.windowWidth,
+          top: 0,
+          bottom: SYSTEM_INFO.windowHeight,
+        }),
+        tipsStyle: `top: ${SYSTEM_INFO.windowHeight}px;`,
+      });
+      setTimeout(() => {
+        this.setData({ show: false });
+        const obj = wx.getStorageSync(NEW_USER_GUIDE_COMPLETION_STATUS) || {};
+        obj[this.data.storgeKey] = true;
+        wx.setStorageSync(NEW_USER_GUIDE_COMPLETION_STATUS, obj);
+        this.triggerEvent("end", { pageKey: this.properties.pageKey });
+      }, this.properties.animationTime + 50);
+    },
+
+    setTipsStyle() {
+      wx.nextTick(async () => {
+        const { height } = await this.selectNodeRect("#NewUserGuideTips", this);
+        const tipPosition = this.data.currentTipPosition;
+
+        if (tipPosition === 'top') {
+          // 强制显示在上方
+          this.setData({
+            tipsStyle: `top: ${Math.max(0, this.data.targetNodeInfo.top - height - 20)}px;`,
+          });
+        } else if (tipPosition === 'bottom') {
+          // 强制显示在下方
+          this.setData({
+            tipsStyle: `top: ${this.data.targetNodeInfo.bottom + 20}px;`,
+          });
+        } else {
+          // auto模式：根据空间自动选择位置
+          if (
+            SYSTEM_INFO.windowHeight - this.data.targetNodeInfo.bottom <
+            height
+          ) {
+            // tips 在下方放不下了，显示在上方
+            this.setData({
+              tipsStyle: `top: ${(this.data.targetNodeInfo.top > SYSTEM_INFO.windowHeight // 目标完全无法显示
+                ? SYSTEM_INFO.windowHeight
+                : SYSTEM_INFO.windowHeight > this.data.targetNodeInfo.bottom // 目标能完全显示
+                  ? this.data.targetNodeInfo.top
+                  : SYSTEM_INFO.windowHeight >
+                    this.data.targetNodeInfo.bottom + height // tips 底部无法显示
+                    ? this.data.targetNodeInfo.bottom
+                    : this.data.targetNodeInfo.top) -
+                height -
+                20
+                }px;`,
+            });
+          } else {
+            // 显示在下方
+            this.setData({
+              tipsStyle: `top: ${this.data.targetNodeInfo.bottom + 20}px;`,
+            });
+          }
+        }
+      });
+    },
+
+    updateStorgeKey() {
+      this.setData({
+        storgeKey: this.properties.pageKey || getCurrentPages().pop()?.route
+      });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true
+}
+</script>
+
+<style scoped>
+.transition-all {
+  transition: all var(--animationTime, 0.2s);
+}
+</style>

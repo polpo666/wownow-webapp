@@ -1,0 +1,46 @@
+<template>
+  <view class="h-full flex flex-col items-center justify-center">
+    <image class="w-240rpx h-240rpx mb-30rpx" src="../../../assets/base/no-data.png" />
+    <text class="text-40rpx text-white">暂无订单</text>
+    <view class="mt-10rpx text-28rpx text-[#929292]">
+      这里会展示你所有的订单记录和
+    </view>
+    <view class="mb-50rpx text-28rpx text-[#929292]">
+      状态，方便查看进度与售后
+    </view>
+    <van-button
+      type="primary"
+      custom-style="font-size: 28rpx;"
+      bindtap="goCreatePage"
+    >
+      马上创建作品
+    </van-button>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core';
+import { useChatStore } from '@/store';
+import { mapActions } from '@mpxjs/pinia';
+
+createComponent({
+  methods: {
+    ...mapActions(useChatStore, ["resetChatStore"]),
+    
+    goCreatePage() {
+      this.resetChatStore();
+      wx.redirectTo({
+        url: '/pages/create/category'
+      });
+    }
+  }
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index"
+  }
+}
+</script>

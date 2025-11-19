@@ -1,0 +1,115 @@
+<template>
+  <!-- the whole header (including the status bar and navigation bar)  -->
+  <view class="nav-bar" style="height:{{navBarHeight}}px; display: flex; align-items: center; background-color: {{ bgColor }};">
+    <view class="back"
+      style="display: flex; align-items: center; padding: 0; height:{{menuHeight}}px; min-height:{{menuHeight}}px; line-height:{{menuHeight}}px; top:{{menuTop}}px; left:{{menuRight}}px; right: {{menuRight}}px;"
+      bind:tap="handleBack">
+      <van-icon wx:if="{{ isBack }}" name="{{ iconName }}" size="20" color="white" />
+      <view class="absolute left-1/2 text-white transform -translate-x-1/2 leading-tight flex flex-col items-center">
+        <text wx:if="{{ title }}" class="text-34rpx">{{ title }}</text>
+        <text wx:if="{{ subTitle }}" class="text-24rpx">( {{ subTitle }} )</text>
+      </view>
+    </view>
+  </view>
+  <view style="height:{{navBarHeight}}px;"></view>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core'
+
+createComponent({
+  properties: {
+    isBack: {
+      type: Boolean,
+      value: false
+    },
+    title: {
+      type: String,
+      value: 'WOWNOW'
+    },
+    subTitle: {
+      type: String,
+      value: ''
+    },
+    defaultBackBehavior: {
+      type: Boolean,
+      value: true
+    },
+    iconName: {
+      type: String,
+      value: 'arrow-left'
+    }
+  },
+  data: {
+    navBarHeight: 0,
+    menuRight: 0,
+    menuTop: 0,
+    menuHeight: 0,
+    bgColor: 'transparent',
+  },
+  attached: function () {
+    const that = this;
+    const windowInfo = wx.getWindowInfo();
+    const menuButtonInfo = wx.getMenuButtonBoundingClientRect();
+    // The navigation bar height = the status bar height + 44(all models are applicable)
+    that.navBarHeight = windowInfo.statusBarHeight + 44;
+    that.menuRight = windowInfo.screenWidth - menuButtonInfo.right;
+    that.menuTop = menuButtonInfo.top;
+    that.menuHeight = menuButtonInfo.height; 
+    // Handle onPageScroll to change the background color of the nav-bar
+    const pages = getCurrentPages();
+    const page = pages[pages.length - 1];
+    if (page) {
+      const originOnPageScroll = page.onPageScroll;
+      page.onPageScroll = (e) => {
+        if (!e) return;
+        const newBgColor = e.scrollTop > 0 ? '#0D0D0D' : 'transparent';
+        if (that.data.bgColor !== newBgColor) {
+          that.setData({ bgColor: newBgColor });
+        }
+        if (typeof originOnPageScroll === 'function') {
+          originOnPageScroll.call(page, e);
+        }
+      }
+    }
+  },
+  methods: {
+    handleBack() {
+      if (this.data.defaultBackBehavior) {
+        wx.navigateBack({
+          delta: 1
+        })
+      } else {
+        this.triggerEvent('back')
+      }
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}
+</script>
+
+<style>
+.nav-bar {
+  position: fixed;
+  width: 100%;
+  top: 0;
+  color: #fff;
+  z-index: 99;
+  transition: background-color 0.15s ease;
+}
+
+.nav-bar .back {
+  color: #333;
+  font-size: 14px;
+  position: absolute;
+  padding-left: 14px;
+}
+</style>

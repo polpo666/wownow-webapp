@@ -1,0 +1,137 @@
+<template>
+  <bg />
+  <view class="flex flex-col h-screen pb-[env(safe-area-inset-bottom)]">
+    <nav-bar isBack="{{ true }}" title="{{ agent?.name || '' }}" />
+    <view class="p-32rpx flex-1 overflow-y-auto overflow-x-hidden">
+      <view 
+        class="rounded-32rpx relative h-68vh min-h-[800rpx]"
+        style="background: radial-gradient(52.98% 50% at 50% 50%, rgba(79, 79, 79, 1) 0%, rgba(33, 33, 33, 1) 100%);"
+      >
+        <image 
+          src="{{ agent?.coverUrl }}" 
+          mode="aspectFill" 
+          class="absolute top-0 left-0 z-0 w-full h-full rounded-32rpx"
+          wx:if="{{ agent?.coverUrl && !agent?.coverUrlError }}"
+          bind:error="handleCoverError"
+        />
+        <view
+          wx:elif="{{ !agent?.coverUrl || agent?.coverUrlError }}"
+          class="absolute top-35% left-1/2 -translate-x-1/2 z-0"
+        >
+          <image src="/src/assets/svgs/icon-nfc-agent.svg" mode="aspectFit" class="w-240rpx h-240rpx opacity-60" />
+        </view>
+
+        <view class="relative z-10 h-full flex flex-col">
+          <!-- <view class="flex justify-end px-16rpx pt-16rpx pb-32rpx">
+            <view class="bg-white/20 rounded-16rpx px-24rpx py-12rpx flex items-center gap-16rpx">
+              <image wx:if="{{ agent?.icon }}" src="{{ agent.icon }}" mode="aspectFit" class="w-32rpx h-32rpx" />
+              <image wx:else src="/src/assets/svgs/icon-nfc-agent.svg" mode="aspectFit" class="w-32rpx h-32rpx" />
+              <text class="text-28rpx font-medium text-white">Agent</text>
+            </view>
+          </view> -->
+          <view class="flex-1 relative">
+            <view class="absolute bottom-0 left-0 max-h-full overflow-y-auto overflow-x-hidden px-16rpx">
+              <view class="text-44rpx font-medium text-[#0D0D0D] pb-8rpx">{{ agent?.name || '' }}</view>
+              <view class="text-28rpx leading-40rpx text-[#0D0D0D]">{{ agent?.description || '' }}</view>
+            </view>
+          </view>
+          <view class="pt-20rpx px-16rpx pb-16rpx">
+            <van-button 
+              disabled="{{ !agent }}" 
+              type="primary" 
+              block 
+              bindtap="handleComplete" 
+              custom-class="!h-110rpx !rounded-32rpx !text-32rpx"
+            >
+              选择
+            </van-button>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <emotion-words-modal 
+    show="{{ showEmotionWordsModal }}"
+    agent="{{ agent }}"
+    bind:close="onClose"
+    bind:confirm="onEmotionWordsConfirm" 
+  />
+</template>
+
+<script lang="ts">
+import { useProduceStore } from "@/store";
+import { NfcAgent } from "@/types";
+import { createPage } from "@mpxjs/core";
+import { mapActions } from "@mpxjs/pinia";
+
+createPage({
+  data: {
+    agent: null as NfcAgent | null,
+    showEmotionWordsModal: false,
+  },
+  onLoad() {
+    let agent = null;
+    if (this.options.agent) {
+      try {
+        agent = JSON.parse(decodeURIComponent(this.options.agent));
+      } catch (e) {
+        agent = null;
+      }
+    }
+    this.setData({ agent });
+  },
+  methods: {
+    ...mapActions(useProduceStore, ["setNfcContent", "saveToStorage"]),
+
+    onClose() {
+      this.setData({ showEmotionWordsModal: false });
+    },
+
+    handleCoverError() {
+      if (this.data.agent) {
+        this.setData({ agent: { ...this.data.agent, coverUrlError: true } });
+      }
+    },
+
+    handleComplete() {
+      if (!this.data.agent) return;
+      const { agent } = this.data;
+      if (agent.name.includes("情绪电台") && agent.metadata) {
+        this.setData({ showEmotionWordsModal: true });
+      } else {
+        this.setNfcContent({
+          type: "agent",
+          link: agent?.url || "",
+          text: "",
+          attachments: [],
+          agent: agent ?? undefined,
+        });
+        this.saveToStorage();
+        wx.navigateBack({ delta: 2 });
+      }
+    },
+
+    onEmotionWordsConfirm(e: any) {
+      this.setNfcContent({
+        type: "agent",
+        link: `${this.data.agent?.url}podcast/${e.detail.channelId}`,
+        text: "",
+        attachments: [],
+        agent: this.data.agent ?? undefined,
+      });
+      this.saveToStorage();
+      wx.navigateBack({ delta: 2 });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "emotion-words-modal": "../components/emotion-words-modal",
+  }
+}
+</script>

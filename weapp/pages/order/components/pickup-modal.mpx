@@ -1,0 +1,90 @@
+<template>
+  <van-popup
+    show="{{ isShowPickupModal }}"
+    position="bottom"
+    close-on-click-overlay="{{ false }}"
+    custom-class="bg-transparent"
+    bind:close="onClose"
+    z-index="99999"
+  >
+    <view class="rounded-[70rpx] px-0 pt-0 pb-48rpx mx-4 mt-8 relative overflow-hidden">
+      <view class="pickup-modal-header flex items-end justify-center">
+        <text class="mb-20rpx text-26rpx font-bold text-black">取件码</text>
+      </view>
+
+      <!-- 主体内容 -->
+      <view class="px-32rpx pb-100rpx bg-[#fcf9ee] rounded-b-[70rpx] overflow-hidden">
+        <!-- 取件码数字 -->
+        <view class="text-center mb-40rpx">
+          <text class="text-80rpx font-blob text-black tracking-[16rpx]">{{ order?.pickupCode || '无' }}</text>
+        </view>
+
+        <!-- 商品数量 -->
+        <view class="mb-50rpx text-32rpx text-black">
+          <text>商品数量：</text>
+          <text class="font-medium">{{ order?.quantity || 0 }}</text>
+        </view>
+
+        <!-- 机器信息 -->
+        <view class="mb-32rpx">
+          <view class="text-32rpx text-black font-medium mb-16rpx">{{ order?.device?.deviceName || '暂无设备名' }}</view>
+          <view class="text-24rpx text-[#999] leading-[36rpx]">
+            {{ order?.device?.address || '暂无地址信息' }}
+          </view>
+        </view>
+
+        <!-- 关闭按钮 -->
+        <view class="mt-50rpx">
+          <view class="bg-[#000] rounded-[30rpx] h-88rpx flex items-center justify-center" bindtap="onClose">
+            <text class="text-white text-28rpx font-medium">关闭</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </van-popup>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core';
+import { Order } from '@/types/order';
+
+createComponent({
+  properties: {
+    isShowPickupModal: {
+      type: Boolean,
+      value: false
+    },
+    order: {
+      type: Object,
+      value: {} as Order
+    }
+  },
+  methods: {
+    onClose() {
+      this.triggerEvent('close');
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-popup": "@vant/weapp/popup/index"
+  }
+}
+</script>
+
+<style>
+.pickup-modal-header {
+  width: 100%;
+  height: 160rpx;
+  position: relative;
+  overflow: hidden;
+  background-image: url('/public/images/bg-login.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+</style>

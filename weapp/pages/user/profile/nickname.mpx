@@ -1,0 +1,103 @@
+<template>
+  <view>
+    <bg />
+    <nav-bar title="修改昵称" isBack="{{ true }}" />
+    <view class="p-30rpx">
+      <view class="bg-[#232323] rounded-32rpx py-32rpx px-32rpx flex justify-between items-center gap-8rpx">
+        <input
+          class="flex-1 bg-transparent text-white text-28rpx placeholder:text-white/55 focus:outline-none"
+          type="nickname"
+          placeholder="请输入昵称"
+          bindinput="handleInput"
+          value="{{ nickname }}"
+          confirm-type="done"
+          maxlength="{{ 20 }}"
+        />
+        <text class="text-#9C9C9C text-28rpx shrink-0">{{ nickname.length }}/20</text>
+      </view>
+    </view>
+
+    <view class="fixed bottom-0 left-0 w-full px-30rpx pb-[calc(env(safe-area-inset-bottom)+24rpx)]">
+      <van-button 
+        type="primary" 
+        custom-class="w-full !border-none {{ isEmpty ? '!bg-#7A7A7A !text-#A6A6A6' : '!bg-#FADA39 !text-#0A0A0A' }}" 
+        bind:tap="handleSave" 
+        disabled="{{ isEmpty }}"
+      >
+        保存
+      </van-button>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from "@mpxjs/core";
+import { useAuthStore } from "@/store";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { updateUserDetail } from "@/api/auth";
+
+createPage({
+  data: {
+    nickname: "",
+  },
+  computed: {
+    ...mapState(useAuthStore, ["isLoggedIn", "user"]),
+    isEmpty() {
+      return this.nickname.trim().length === 0;
+    }
+  },
+  onLoad() {
+    if (this.isLoggedIn && this.user) {
+      this.nickname = this.user.nickname || "";
+    }
+  },
+  methods: {
+    ...mapActions(useAuthStore, ["updateUserInfo"]),
+
+    handleInput(event: any) {
+      this.nickname = event.detail.value;
+    },
+    async handleSave() {
+      if (this.isEmpty) {
+        wx.showToast({ title: "昵称不能为空", icon: "none" });
+        return;
+      }
+      if (!this.isLoggedIn || !this.user) {
+        wx.showToast({ title: "请先登录", icon: "none" });
+        return;
+      }
+      if (this.nickname === this.user?.nickname) {
+        wx.showToast({ title: "保存成功", icon: "success" });
+        setTimeout(() => wx.navigateBack(), 300);
+        return;
+      }
+      wx.showLoading({ title: '保存中...', mask: true });
+      try {
+        const result = await updateUserDetail({ nickname: this.nickname });
+        if (result.code === 0 && result.data?.success) {
+          this.updateUserInfo({ nickname: this.nickname });
+          wx.hideLoading();
+          wx.showToast({ title: "保存成功", icon: "success" });
+          setTimeout(() => wx.navigateBack(), 300);
+        } else {
+          console.warn("更新用户信息失败:", result.message);
+          wx.hideLoading();
+          wx.showToast({ title: "保存失败，请稍后重试", icon: "none" });
+        }
+      } catch (error) {
+        console.error("更新用户信息失败:", error);
+        wx.hideLoading();
+        wx.showToast({ title: "保存失败，请稍后重试", icon: "none" });
+      }
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index"
+  }
+}
+</script>

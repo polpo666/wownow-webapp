@@ -1,0 +1,453 @@
+<template>
+  <view class="h-screen flex flex-col">
+    <bg />
+    <nav-bar isBack="{{ true }}" title="绑定设备" />
+    <scroll-view
+      class="flex-1 overflow-hidden"
+      scroll-y
+      refresher-enabled
+      refresher-triggered="{{ refresherTriggered }}"
+      refresher-threshold="{{ 45 }}"
+      refresher-default-style="none"
+      bindrefresherrefresh="onRefresh"
+      bindrefresherpulling="onRefresherPulling"
+      bindrefresherrestore="onRefresherRestore"
+      bindscrolltolower="onReachBottom"
+      lower-threshold="100"
+    >
+      <!-- 自定义下拉刷新样式 -->
+      <view slot="refresher" class="flex flex-col items-center justify-center py-32rpx w-full">
+        <view wx:if="{{ refresherTriggered }}" class="flex items-center justify-center">
+          <view class="w-32rpx h-32rpx border-4rpx border-gray-400 border-t-white rounded-full animate-spin mr-16rpx" />
+          <text class="text-[#D1D5DB] text-28rpx"> 正在刷新... </text>
+        </view>
+        <view wx:elif="{{ refresherPulling }}" class="w-full text-center">
+          <text class="text-[#D1D5DB] text-28rpx"> {{ refresherText }}</text>
+        </view>
+      </view>
+
+      <view wx:for="{{ deviceList }}" wx:key="id" wx:for-item="device" class="px-4 py-2">
+        <view style="border: {{ selectedDevice?.id === device.id ? '2px solid #FADA39' : '2px solid #232323' }}"
+          class="flex items-center p-2 rounded-xl bg-[#232323]" bind:tap="handleDeviceSelect(device)"
+          data-device="{{ device }}">
+          <image src="../../assets/produce/device.png" class="w-13 h-13 rounded-xl" />
+          <view class="flex-1 text-left text-[#787878] ml-2">
+            <view class="text-[36rpx] font-normal mb-1 {{ selectedDevice?.id === device.id ? 'text-white' : '' }}">
+              {{ device.deviceName }}
+            </view>
+            <view class="text-[28rpx] font-normal">
+              {{ device.distance ? '距你' + device.distance + ' |' : '' }}  {{ device.address }}
+            </view>
+          </view>
+          <image wx:if="{{ selectedDevice?.id === device.id }}" src="../../assets/device/device-checked.png"
+            class="w-6 h-6" />
+        </view>
+      </view>
+
+      <!-- 加载更多状态 -->
+      <view wx:if="{{ loadingMore }}" class="flex justify-center py-20rpx">
+        <view class="flex items-center">
+          <view class="w-24rpx h-24rpx border-4rpx border-gray-600 border-t-white rounded-full animate-spin mr-16rpx" />
+          <text class="text-gray-400 text-26rpx">加载中...</text>
+        </view>
+      </view>
+
+      <!-- 没有更多数据 -->
+      <view wx:elif="{{ noMoreData }}" class="flex justify-center py-20rpx">
+        <text class="text-gray-500 text-24rpx">没有更多数据了</text>
+      </view>
+    </scroll-view>
+    <view class="flex gap-2 px-30rpx py-24rpx pb-[calc(24rpx+env(safe-area-inset-bottom))] flex-shrink-0">
+      <view class="w-[200rpx]">
+        <van-button block custom-class="!bg-[#232323] !border-[#232323] !text-white"
+          bind:click="onCancel">取消</van-button>
+      </view>
+      <view class="flex-1">
+        <van-button block type="primary" bind:click="goConfigPage">确认下单</van-button>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from "@mpxjs/core";
+import { getDeviceList } from "@/api/device";
+import { Device } from "@/types";
+import { useProduceStore } from "@/store";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { formatDistance } from "@/utils/common";
+
+createPage({
+  data: {
+    deviceList: [] as Device[],
+    selectedDevice: null as (Device | null),
+    isLoading: false,
+    refresherTriggered: false,
+    refresherPulling: false,
+    refresherText: "下拉刷新",
+    loadingMore: false,
+    hasMore: true,
+    currentPage: 1,
+    pageSize: 10,
+    total: 0,
+    // 缓存位置信息，避免重复获取
+    cachedLocation: null as { longitude: number; latitude: number } | null,
+  },
+  computed: {
+    ...mapState(useProduceStore, ['deviceId']),
+    noMoreData() {
+      return !this.hasMore && this.deviceList.length > 0;
+    },
+  },
+  onLoad() {
+    this.queryDeviceList();
+  },
+  methods: {
+    ...mapActions(useProduceStore, [
+      'setDeviceId',
+      'setQuantity',
+      'clearNfc'
+    ]),
+    handleDeviceSelect(device: Device) {
+      this.setData({
+        selectedDevice: device
+      });
+
+      this.setDeviceId(device.id);
+    },
+    queryDeviceList() {
+      // 先检查位置权限
+      wx.getSetting({
+        success: (settingRes) => {
+          const hasLocationAuth = settingRes.authSetting['scope.userLocation'];
+
+          if (hasLocationAuth === false) {
+            // 用户之前拒绝过权限，需要引导用户打开设置
+            wx.showModal({
+              title: '需要位置权限',
+              content: '为了帮您找到附近的设备，需要获取您的位置信息',
+              confirmText: '去设置',
+              cancelText: '取消',
+              success: (modalRes) => {
+                if (modalRes.confirm) {
+                  // 打开设置页面
+                  wx.openSetting({
+                    success: (openSettingRes) => {
+                      if (openSettingRes.authSetting['scope.userLocation']) {
+                        // 用户已授权，重新获取位置
+                        this._getLocationAndQueryDevices(true, false);
+                      }
+                    }
+                  });
+                } else {
+                  // 用户拒绝，仍然可以获取设备列表，只是没有距离信息
+                  this._queryDevicesWithoutLocation(true, false);
+                }
+              }
+            });
+          } else if (hasLocationAuth === undefined) {
+            // 首次请求权限
+            wx.authorize({
+              scope: 'scope.userLocation',
+              success: () => {
+                // 授权成功，获取位置
+                this._getLocationAndQueryDevices(true, false);
+              },
+              fail: () => {
+                // 用户拒绝授权，仍然可以获取设备列表
+                this._queryDevicesWithoutLocation(true, false);
+              }
+            });
+          } else {
+            // 用户已授权，直接获取位置
+            this._getLocationAndQueryDevices(true, false);
+          }
+        },
+        fail: () => {
+          // 获取设置失败，尝试直接获取位置
+          this._getLocationAndQueryDevices(true, false);
+        }
+      });
+    },
+
+    // 获取位置并查询设备列表
+    _getLocationAndQueryDevices(isRefresh = false, showSuccessToast = false) {
+      console.log('_getLocationAndQueryDevices 调用', { isRefresh, showSuccessToast, hasCachedLocation: !!this.cachedLocation });
+      // 如果有缓存的位置且不是刷新操作，直接使用缓存
+      if (this.cachedLocation && !isRefresh) {
+        console.log('使用缓存位置');
+        this._fetchDeviceList(
+          this.cachedLocation.longitude,
+          this.cachedLocation.latitude,
+          false,
+          false
+        );
+        return;
+      }
+
+      console.log('开始获取位置信息');
+      wx.getLocation({
+        type: 'gcj02',
+        success: (res) => {
+          const { longitude, latitude } = res;
+          console.log('位置获取成功:', { longitude, latitude });
+          // 缓存位置信息
+          this.setData({
+            cachedLocation: { longitude, latitude }
+          });
+          this._fetchDeviceList(longitude, latitude, isRefresh, showSuccessToast);
+        },
+        fail: (err) => {
+          console.error('获取位置失败:', err);
+          if (isRefresh) {
+            wx.showToast({
+              title: '获取位置失败',
+              icon: 'none'
+            });
+          }
+          this._queryDevicesWithoutLocation(isRefresh, showSuccessToast);
+        }
+      });
+    },
+
+    // 不带位置信息查询设备列表
+    async _queryDevicesWithoutLocation(isRefresh = false, showSuccessToast = false) {
+      console.log('_queryDevicesWithoutLocation 调用', { isRefresh, showSuccessToast, currentPage: this.currentPage });
+      try {
+        if (isRefresh) {
+          this.setData({
+            isLoading: true,
+            currentPage: 1,
+            hasMore: true,
+          });
+        } else {
+          this.setData({ loadingMore: true });
+        }
+
+        console.log('开始请求设备列表（无位置）', {
+          withDistance: false,
+          page: this.currentPage,
+          pageSize: this.pageSize,
+        });
+
+        const res = await getDeviceList({
+          withDistance: false,
+          page: this.currentPage,
+          pageSize: this.pageSize,
+        });
+
+        console.log('设备列表请求完成', { code: res.code, listLength: res.data?.list?.length, total: res.data?.totalCount });
+
+        const list = res.data?.list || [];
+        const total = res.data?.totalCount || 0;
+
+        if (res.code === 0) {
+          if (isRefresh) {
+            this.setData({ deviceList: list });
+            // 自动选中第一个设备
+            if (list.length > 0) {
+              this.setData({ selectedDevice: list[0] });
+              this.setDeviceId(list[0].id);
+            }
+          } else {
+            this.setData({
+              deviceList: [...this.deviceList, ...list],
+            });
+          }
+
+          this.setData({
+            total: total,
+            hasMore: this.deviceList.length < total,
+          });
+
+          if (list.length > 0) {
+            this.setData({ currentPage: this.currentPage + 1 });
+          }
+
+          // 只有在手动下拉刷新时才显示成功提示
+          if (showSuccessToast) {
+            setTimeout(() => {
+              wx.showToast({
+                title: "刷新成功",
+                icon: "none",
+                duration: 1500,
+              });
+            }, 200);
+          }
+        } else {
+          wx.showToast({ title: res.message || '获取设备列表失败', icon: 'none' });
+        }
+      } catch (error) {
+        console.error('加载设备列表失败:', error);
+        wx.showToast({
+          title: "加载失败",
+          icon: "none",
+        });
+      } finally {
+        this.setData({
+          isLoading: false,
+          loadingMore: false,
+          refresherTriggered: false,
+        });
+      }
+    },
+
+    // 查询设备列表（带位置信息）
+    async _fetchDeviceList(longitude: number, latitude: number, isRefresh = false, showSuccessToast = false) {
+      console.log('_fetchDeviceList 调用', { longitude, latitude, isRefresh, showSuccessToast, currentPage: this.currentPage });
+      try {
+        if (isRefresh) {
+          this.setData({
+            isLoading: true,
+            currentPage: 1,
+            hasMore: true,
+          });
+        } else {
+          this.setData({ loadingMore: true });
+        }
+
+        console.log('开始请求设备列表', {
+          userLng: longitude,
+          userLat: latitude,
+          withDistance: true,
+          page: this.currentPage,
+          pageSize: this.pageSize,
+        });
+
+        const res = await getDeviceList({
+          userLng: longitude,
+          userLat: latitude,
+          withDistance: true,
+          page: this.currentPage,
+          pageSize: this.pageSize,
+        });
+
+        console.log('设备列表请求完成', { code: res.code, listLength: res.data?.list?.length, total: res.data?.totalCount });
+
+        const list = res.data?.list || [];
+        const total = res.data?.totalCount || 0;
+
+        if (res.code === 0) {
+          const formattedList = list.map(item => ({
+            ...item,
+            distance: item.distance ? formatDistance(item.distance) : undefined
+          }));
+
+          if (isRefresh) {
+            this.setData({ deviceList: formattedList });
+            // 自动选中第一个设备
+            if (formattedList.length > 0) {
+              this.setData({ selectedDevice: formattedList[0] });
+              this.setDeviceId(formattedList[0].id);
+            }
+          } else {
+            this.setData({
+              deviceList: [...this.deviceList, ...formattedList],
+            });
+          }
+
+          this.setData({
+            total: total,
+            hasMore: this.deviceList.length < total,
+          });
+
+          if (list.length > 0) {
+            this.setData({ currentPage: this.currentPage + 1 });
+          }
+
+          // 只有在手动下拉刷新时才显示成功提示
+          if (showSuccessToast) {
+            setTimeout(() => {
+              wx.showToast({
+                title: "刷新成功",
+                icon: "none",
+                duration: 1500,
+              });
+            }, 200);
+          }
+        } else {
+          wx.showToast({ title: res.message || '获取设备列表失败', icon: 'none' });
+        }
+      } catch (error) {
+        console.error('加载设备列表失败:', error);
+        wx.showToast({
+          title: "加载失败",
+          icon: "none",
+        });
+      } finally {
+        this.setData({
+          isLoading: false,
+          loadingMore: false,
+          refresherTriggered: false,
+        });
+      }
+    },
+
+    // 下拉刷新开始
+    onRefresh() {
+      console.log('===== 下拉刷新触发 =====');
+      this.setData({ refresherTriggered: true });
+      // 下拉刷新时，重新获取位置信息（不使用缓存）
+      this._getLocationAndQueryDevices(true, true);
+    },
+
+    // 下拉过程中
+    onRefresherPulling(e: any) {
+      const { dy } = e.detail;
+      this.setData({
+        refresherPulling: true,
+        refresherText: dy > 45 ? "释放刷新" : "下拉刷新",
+      });
+    },
+
+    // 下拉恢复
+    onRefresherRestore() {
+      this.setData({
+        refresherPulling: false,
+        refresherText: "下拉刷新",
+      });
+    },
+
+    // 触底加载更多
+    onReachBottom() {
+      if (!this.loadingMore && this.hasMore) {
+        // 使用缓存的位置加载更多
+        if (this.cachedLocation) {
+          this._fetchDeviceList(
+            this.cachedLocation.longitude,
+            this.cachedLocation.latitude,
+            false
+          );
+        } else {
+          this._queryDevicesWithoutLocation(false);
+        }
+      }
+    },
+    onCancel() {
+      wx.navigateBack();
+    },
+    goConfigPage() {
+      if (!this.deviceId) {
+        wx.showToast({ title: '请选择一台设备', icon: 'none' });
+        return;
+      }
+
+      this.setQuantity(1);
+      this.clearNfc();
+
+      wx.navigateTo({
+        url: '/subPackages/produce/config'
+      });
+    }
+  }
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "nav-bar": "../../components/nav-bar",
+    "van-button": "@vant/weapp/button/index"
+  }
+}
+</script>

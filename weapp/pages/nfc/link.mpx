@@ -1,0 +1,142 @@
+<template>
+  <view class="nfc-bg bg-[#0D0D0D] flex flex-col h-screen pb-[env(safe-area-inset-bottom)]">
+    <nav-bar
+      title="链接跳转"
+      isBack="true"
+      defaultBackBehavior="{{ false }}"
+      bind:back="handleBack"
+    />
+    <view class="flex-1 flex flex-col p-32rpx">
+      <view class="flex-1">
+        <textarea
+          placeholder="点击输入链接内容"
+          value="{{ inputVal }}"
+          bindinput="handleInputChange"
+          rows="{6}"
+          style="border: 1px solid #3e3851"
+          class="w-full rounded-xl px-30rpx py-24rpx bg-transparent text-28rpx text-white placeholder:text-white/55 resize-none !bg-[#0D0D0D]"
+          maxlength="{{ 512 }}"
+        />
+      </view>
+      <van-button
+        type="primary"
+        custom-class="w-full {{ isEmpty && '!bg-#7A7A7A !border-#7A7A7A !text-#A6A6A6 !opacity-100' }}"
+        bindtap="handleComplete"
+        disabled="{{ isEmpty }}"
+      >
+        完成
+      </van-button>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { useProduceStore } from "@/store";
+import { isValidUrl } from "@/utils/common";
+import { createPage } from "@mpxjs/core";
+import { mapActions, mapState } from "@mpxjs/pinia";
+
+const extractLink = (text: string): string | null => {
+  if (!text) return null;
+
+  const matches = text.match(/\bhttps?:\/\/[^\s]+/i);
+  if (!matches) return null;
+
+  const sanitized = matches[0].replace(/[\s)\]\}"'<>。。，，！？；：）】》]+$/u, "").trim();
+  return isValidUrl(sanitized) ? sanitized : null;
+};
+
+createPage({
+  data: {
+    inputVal: "",
+    isEmpty: true,
+    recognizedLink: "",
+  },
+  computed: {
+    ...mapState(useProduceStore, ['nfcContent']),
+  },
+
+  onLoad() {
+    // 从 store 中恢复链接内容
+    if (this.nfcContent && this.nfcContent.type === "link" && this.nfcContent.link) {
+      this.setData({
+        inputVal: this.nfcContent.link,
+        recognizedLink: this.nfcContent.link,
+        isEmpty: this.nfcContent.link.trim() === "",
+      });
+    }
+  },
+
+  methods: {
+    ...mapActions(useProduceStore, ['setNfcContent', 'saveToStorage']),
+
+    handleInputChange(e: any) {
+      const value = e.detail.value;
+      const recognizedLink = extractLink(value) || "";
+      this.setData({
+        inputVal: value,
+        recognizedLink,
+        isEmpty: recognizedLink === "",
+      });
+    },
+
+    handleBack() {
+      const currentLink = (this.data.recognizedLink || "").trim();
+      const storedLink = (this.nfcContent?.link || "").trim();
+
+      if (currentLink !== storedLink) {
+        wx.showModal({
+          content: "当前内容未保存，确认返回？",
+          success: (res) => {
+            if (res.confirm) {
+              wx.navigateBack();
+            }
+          },
+        });
+        return;
+      }
+      wx.navigateBack();
+    },
+
+    handleComplete() {
+      const sanitizedLink = (this.data.recognizedLink || "").trim();
+      if (!sanitizedLink) {
+        wx.showToast({ title: "未识别到有效链接", icon: "none" });
+        return;
+      }
+
+      this.setData({
+        inputVal: sanitizedLink,
+        recognizedLink: sanitizedLink,
+        isEmpty: false,
+      });
+
+      // 保存链接内容到 store
+      this.setNfcContent({
+        type: "link",
+        link: sanitizedLink,
+        text: "",
+        attachments: [],
+      });
+      this.saveToStorage();
+      wx.navigateBack();
+    },
+  },
+});
+</script>
+
+<style lang="stylus">
+.nfc-bg
+  background-image url('/public/images/bg-chat.png')
+  background-size cover
+  background-position center
+  background-repeat no-repeat
+</style>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index"
+  }
+}
+</script>

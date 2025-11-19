@@ -1,0 +1,130 @@
+<template>
+  <view class="bg-[#fefbee] mt-24rpx p-30rpx rounded-32rpx relative">
+    <view wx:if="{{ showMask }}" class="absolute inset-0 bg-white/50 rounded-32rpx"></view>
+    <view
+      class="flex gap-32rpx items-center pb-32rpx"
+      data-coupon="{{ coupon }}"
+      bindtap="onSelectCoupon"
+    >
+      <view class="flex-1 flex items-center justify-between gap-16rpx">
+        <view>
+          <text class="text-36rpx font-medium text-[#0a0a0a] leading-56rpx break-all">{{ coupon.name }}</text>
+          <view class="bg-[#ffeff2] px-16rpx py-8rpx rounded-20rpx mt-8rpx">
+            <text wx:if="{{ isValid }}" class="text-24rpx font-medium text-[#ee3154] leading-normal">{{ coupon.validEnd }}过期</text>
+            <text wx:elif="{{ !isValid }}" class="text-24rpx font-medium text-[#ee3154] leading-normal">{{ coupon.validStart }}可用</text>
+          </view>
+        </view>
+
+        <view class="shrink-0">
+          <!-- 满减券显示金额 -->
+          <block wx:if="{{ coupon.type === 'cash' }}">
+            <view class="text-[#ee3154] text-center">
+              <text class="text-36rpx mr-8rpx">¥</text>
+              <text class="text-56rpx font-medium leading-56rpx">{{ coupon.discountAmount }}</text>
+            </view>
+            <text class="text-26rpx font-medium text-[#ee3154] leading-normal">满{{ coupon.thresholdAmount }}可用</text>
+          </block>
+
+          <!-- 折扣券显示百分比 -->
+          <block wx:elif="{{ coupon.type === 'discount' }}">
+            <view class="text-[#ee3154] text-48rpx font-semibold leading-46rpx">{{ 100 - coupon.discountRate }}%</view>
+            <view class="text-[#ee3154] text-26rpx font-medium leading-normal text-center">Off</view>
+          </block>
+
+          <!-- 免单券显示免费 -->
+          <block wx:else>
+            <view class="text-[#ee3154]">
+              <text class="text-36rpx mr-8rpx">¥</text>
+              <text class="text-56rpx font-medium leading-56rpx">0.01</text>
+            </view>
+            <view class="text-center text-26rpx font-medium text-[#ee3154] leading-normal">Free</view>
+          </block>
+        </view>
+      </view>
+      <!-- 选中状态指示器 -->
+      <view
+        class="shrink-0 w-48rpx h-48rpx {{ isSelected ? 'bg-[#FADA39]' : 'bg-transparent border border-solid border-[#e2e2e2]' }} rounded-full flex items-center justify-center"
+      >
+        <image
+          src="/src/assets/svgs/icon-checked-white.svg"
+          wx:if="{{ isSelected }}"
+          mode="aspectFit"
+          class="w-full h-full"
+        />
+      </view>
+    </view>
+    <view class="relative z-50 pt-24rpx pb-8rpx w-full" style="border-top: 1px solid #e2e2e2">
+      <van-collapse wx:if="{{ unavailableReason }}" value="{{ activeName }}" border="{{ false }}" bind:change="onCollapseChange">
+        <van-collapse-item title="不可用原因：{{ unavailableReason }}" name="{{ coupon.id }}" border="{{ false }}">
+          {{ coupon.description || "暂无使用说明" }}
+        </van-collapse-item>
+      </van-collapse>
+      
+      <van-collapse wx:else value="{{ activeName }}" border="{{ false }}" bind:change="onCollapseChange">
+        <van-collapse-item title="使用规则" name="{{ coupon.id }}" border="{{ false }}">
+          {{ coupon.description || "暂无使用说明" }}
+        </van-collapse-item>
+      </van-collapse>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { ExtendedUserCoupon } from "@/types";
+import { createComponent } from "@mpxjs/core";
+
+createComponent({
+  properties: {
+    coupon: {
+      type: Object,
+      value: {} as ExtendedUserCoupon,
+    },
+    selectedIds: {
+      type: Array,
+      value: [] as Number[],
+    },
+    showMask: {
+      type: Boolean,
+      value: false,
+    },
+  },
+  data: {
+    activeName: null as number | null,
+  },
+  computed: {
+    isValid() {
+      const today = Date.now();
+      const validStart = new Date(this.coupon.validStart.replace(/-/g, "/")).getTime();
+      return today >= validStart;
+    },
+    isSelected() {
+      return this.selectedIds.includes(this.coupon.id);
+    },
+    unavailableReason() {
+      if (this.coupon.unavailableReasons && this.coupon.unavailableReasons.length > 0) {
+        return this.coupon.unavailableReasons.join("；");
+      }
+      return "";
+    }
+  },
+  methods: {
+    onSelectCoupon(e: any) {
+      this.triggerEvent("select", { coupon: e.currentTarget.dataset.coupon });
+    },
+    onCollapseChange(e: any) {
+      this.setData({ activeName: e.detail });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-collapse": "@vant/weapp/collapse/index",
+    "van-collapse-item": "@vant/weapp/collapse-item/index",
+    "van-icon": "@vant/weapp/icon/index",
+  }
+}
+</script>

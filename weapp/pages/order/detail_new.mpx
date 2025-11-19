@@ -1,0 +1,233 @@
+<template>
+  <view class="min-h-screen text-white"
+    style="background: transparent;">
+    <bg />
+    <nav-bar title="订单详情" isBack="{{ true }}" defaultBackBehavior="{{ false }}" bind:back="goOrderListPage" />
+    <scroll-view
+      class="scroll-container"
+      style="height: calc(100vh - 88rpx); padding-bottom: calc(112rpx + {{ safeAreaBottom }}px)"
+      scroll-y
+      refresher-enabled
+      refresher-triggered="{{ refresherTriggered }}"
+      refresher-threshold="{{ 45 }}"
+      refresher-default-style="none"
+      bindrefresherrefresh="onRefresh"
+      bindrefresherpulling="onRefresherPulling"
+      bindrefresherrestore="onRefresherRestore"
+    >
+      <!-- 自定义下拉刷新样式 -->
+      <view slot="refresher" class="flex flex-col items-center justify-center py-32rpx w-full">
+        <view wx:if="{{ refresherTriggered }}" class="flex items-center justify-center">
+          <view class="w-32rpx h-32rpx border-4rpx border-gray-400 border-t-white rounded-full animate-spin mr-16rpx" />
+          <text class="text-[#D1D5DB] text-28rpx">正在刷新...</text>
+        </view>
+        <view wx:elif="{{ refresherPulling }}" class="w-full text-center">
+          <text class="text-[#D1D5DB] text-28rpx">{{ refresherText }}</text>
+        </view>
+      </view>
+
+      <view class="px-40rpx z-10 py-16rpx">
+      <tracking trackSteps="{{ trackSteps }}" order="{{ orderData?.order }}" />
+      <view class="mb-38rpx pt-30rpx" style="border-top: 1rpx solid #333;">
+        <view class="flex items-start gap-16rpx">
+          <!-- 商品图片 -->
+          <view class="w-120rpx h-120rpx rounded-12rpx overflow-hidden flex items-center justify-center shrink-0">
+            <image wx:if="{{ orderData?.order?.asset?.generatedImageUrl }}"
+              src="{{ orderData?.order?.asset?.generatedImageUrl }}" mode="aspectFill" class="w-120rpx h-120rpx"
+              bindtap="previewImage(orderData?.order?.asset?.generatedImageUrl)" />
+          </view>
+
+          <!-- 商品信息 -->
+          <view class="flex-1">
+            <text class="text-white font-medium mb-16rpx block">{{ orderData?.order?.productName }}</text>
+            <view class="flex flex-wrap items-center gap-12rpx mb-8rpx">
+              <view wx:if="{{ orderData?.order?.asset?.name }}"
+                class="bg-[#171717] text-white text-24rpx px-12rpx py-6rpx rounded">
+                {{ orderData?.order?.asset?.name }}
+              </view>
+              <view wx:if="{{ orderData?.order?.asset?.craftType }}"
+                class="bg-[#171717] text-white text-24rpx px-12rpx py-6rpx rounded">
+                {{ orderData?.order?.asset?.craftType }}
+              </view>
+              <view wx:if="{{ orderData?.order?.asset?.nfcContent }}"
+                class="bg-[#171717] text-white text-24rpx px-12rpx py-6rpx rounded">
+                NFC
+              </view>
+              <view class="bg-[#171717] text-gray-300 text-24rpx px-12rpx py-6rpx rounded">
+                {{ orderData?.order?.asset?.processingConfig?.processType || '快速模式' }}
+              </view>
+              <view class="bg-[#171717] text-gray-300 text-24rpx px-12rpx py-6rpx rounded">
+                x{{ orderData?.order?.quantity }}
+              </view>
+            </view>
+          </view>
+          <!-- 价格 -->
+          <view class="text-white text-50rpx font-bold">¥{{ orderData?.order?.payAmount }}</view>
+        </view>
+      </view>
+      <price-info amount="{{ orderData?.order?.amount }}" payAmount="{{ orderData?.order?.payAmount }}"
+        discount-record="{{ orderData?.order?.discountRecord }}" />
+      <order-info order="{{ orderData?.order }}" />
+    </view>
+    </scroll-view>
+    <!-- 底部操作按钮区域 - 四个独立模块 -->
+    <buttons orderSn="{{ orderSn }}" orderData="{{ orderData }}" />
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+import { OrderTrackingRes, OrderPreviewType } from '@/types/order';
+import { getOrderTracking } from '@/api/order';
+import { formatDurationBySecond } from '@/utils/common';
+import { getTemplateDetail } from '@/api/template';
+
+interface DetailData {
+  orderData: OrderTrackingRes
+  orderSn: string
+  safeAreaBottom: number
+  refresherTriggered: boolean
+  refresherPulling: boolean
+  refresherText: string
+}
+
+createPage({
+  data(): DetailData {
+    return {
+      orderData: {} as OrderTrackingRes,
+      orderSn: '',
+      safeAreaBottom: 0,
+      refresherTriggered: false,
+      refresherPulling: false,
+      refresherText: '下拉刷新',
+    }
+  },
+
+  computed: {
+    trackSteps() {
+      const steps: any[] = []
+      if (this.orderData?.tracking && this.orderData.tracking.length > 0) {
+        steps.push(...this.orderData.tracking);
+      }
+      if (this.orderData?.preview && this.orderData.preview.length > 0) {
+        steps.push(...this.orderData.preview);
+      }
+      return steps;
+    }
+  },
+
+  onLoad(options: { orderSn?: string }) {
+    // 获取安全区域高度
+    const systemInfo = wx.getSystemInfoSync();
+    const safeArea = systemInfo.safeArea;
+    if (safeArea) {
+      this.safeAreaBottom = systemInfo.screenHeight - safeArea.bottom;
+    }
+
+    if (options.orderSn) {
+      this.orderSn = options.orderSn;
+      this._getOrderTracking();
+    }
+  },
+
+  methods: {
+    // 下拉刷新开始
+    onRefresh() {
+      this.refresherTriggered = true;
+      this._getOrderTracking().finally(() => {
+        this.refresherTriggered = false;
+      });
+    },
+
+    // 下拉过程中
+    onRefresherPulling(e: any) {
+      const { dy } = e.detail;
+      this.refresherPulling = true;
+      this.refresherText = dy > 45 ? '释放刷新' : '下拉刷新';
+    },
+
+    // 下拉恢复
+    onRefresherRestore() {
+      this.refresherPulling = false;
+    },
+
+    async _getOrderTracking() {
+      try {
+        const res = await getOrderTracking(this.orderSn);
+        if (res.code === 0 && res.data) {
+          const { tracking = [], preview = [], order } = res.data;
+          this.orderData = res.data;
+          this.orderData.tracking = tracking.reverse().map(step => ({
+            ...step,
+            type: OrderPreviewType.Tracking,
+            duration: formatDurationBySecond(step.duration as number)
+          }));
+          this.orderData.preview = preview.map(step => ({
+            ...step,
+            id: new Date().getTime(),
+            type: OrderPreviewType.Preview,
+            duration: formatDurationBySecond(step.duration as number)
+          }));
+
+          if (order.asset.templateId) {
+            const res = await getTemplateDetail(order.asset.templateId);
+            if (res.code === 0 && res.data) {
+              order.asset.craftType = res.data.craftType;
+              order.asset.name = res.data.name;
+            }
+          }
+
+        } else {
+          wx.showToast({
+            title: res.message || '获取订单信息失败',
+            icon: 'error'
+          });
+        }
+      } catch (error) {
+        console.error('获取订单详情失败:', error);
+      }
+    },
+
+    goOrderListPage() {
+      const pages = getCurrentPages();
+
+      if (pages.length > 1) {
+        const prevPage = pages[pages.length - 2];
+        // 检查上一页是否是订单列表页
+        if (prevPage.route === 'pages/order/index') {
+          // 上一页是订单列表，直接返回
+          wx.navigateBack();
+        } else {
+          // 上一页不是订单列表，跳转到订单列表
+          wx.switchTab({ url: '/pages/order/index' });
+        }
+      } else {
+        // 只有一个页面，跳转到订单列表
+        wx.switchTab({ url: '/pages/order/index' });
+      }
+    },
+
+    previewImage(src: string) {
+      wx.previewImage({
+        current: src,
+        urls: [src]
+      });
+    }
+  }
+})
+</script>
+<script type="application/json">
+  {
+    "usingComponents": {
+      "van-button": "@vant/weapp/button/index",
+      "nav-bar": "../../components/nav-bar",
+      "tracking": "./components/detail/tracking.mpx",
+      "price-info": "./components/detail/price-info.mpx",
+      "order-info": "./components/detail/order-info.mpx",
+      "buttons": "./components/detail/buttons.mpx"
+    }
+  }
+</script>
+
+<style lang="stylus">
+</style>

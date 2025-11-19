@@ -1,0 +1,183 @@
+<template>
+  <view class="flex flex-col relative">
+    <!-- 遮罩层，用于点击外部区域关闭 -->
+    <view wx:if="{{ show }}" class="mask" bindtap="closeStyleSelector"></view>
+    <view wx:if="{{ show }}"
+      class="style-container absolute flex gap-1 -left-3 -top-[280rpx] px-3 py-2 mr-3 bg-black w-screen">
+      <view class="style-item animate-fade-in" wx:for="{{ styles }}" wx:key="id" wx:for-index="index"
+        bindtap="onStyleClick(item)">
+        <image wx:if="{{ item.imageUrl }}" src="{{ item.imageUrl }}" mode="aspectFill" />
+        <image wx:else class="placeholder" src="../../assets/svgs/image-placeholder.svg" />
+        <view
+          class="absolute bottom-0 left-0 p-2 bg-gradient-to-t from-black/80 to-transparent w-full rounded text-white font-normal text-[10px]">
+          <text>{{ item.name }}</text>
+        </view>
+      </view>
+      <view class="w-[160rpx]"></view>
+    </view>
+    <view class="rounded-lg text-[13px] flex justify-center items-center px-2 py-1 gap-2"
+      style="border: 1px solid {{ noStyle ? '#333333' : '#575757' }}; color: {{ noStyle ? '#999999' : '#ffffff' }};"
+      bindtap="toggle">
+      <image class="w-30rpx h-30rpx" src="../../assets/style.png" mode="aspectFill"
+        style="filter: {{ noStyle ? 'brightness(0.5)' : 'none' }};" />
+      风格
+    </view>
+  </view>
+</template>
+
+<script>
+import { createComponent } from "@mpxjs/core";
+import { getPromptStyles } from "@/api/template";
+import { flatPromptStyles } from "@/lib/mock-data";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { useChatStore } from "@/store";
+import { TemplateLabel } from "@/types";
+
+createComponent({
+  data: {
+    show: false,
+    styles: [],
+    noStyle: false,
+  },
+  created() {
+    this.fetchStyles();
+  },
+  computed: {
+    ...mapState(useChatStore, ['chatTemplate', 'assetStyleId']),
+  },
+  watch: {
+    chatTemplate: {
+      handler(newVal) {
+
+      },
+      immediate: true
+    }
+  },
+  methods: {
+    ...mapActions(useChatStore, ['setPromptStyle']),
+    fetchStyles() {
+      getPromptStyles({ pagination: false }).then(res => {
+        const { code, data } = res
+        if (code === 0) {
+          const { list } = data
+          this.setData({
+            styles: list,
+          });
+          this.styleFilter();
+        }
+      })
+    },
+    toggle() {
+      if (this.data.noStyle) return
+      this.setData({
+        show: !this.data.show,
+      });
+    },
+    styleFilter() {
+      if (this.chatTemplate) {
+        const { craftType, label, styleId } = this.chatTemplate
+        const initialStyleId = this.assetStyleId !== null ? this.assetStyleId : styleId
+        if (initialStyleId > 0) {
+          this.triggerEvent('styleChange', this.data.styles.find(s => s.id === initialStyleId));
+          return
+        }
+        const promptStyles = this.data.styles
+        if (label === TemplateLabel.FlatCoin) {
+          this.setData({
+            noStyle: true
+          })
+          return
+        }
+        if (craftType.includes('平雕')) {
+          this.setData({
+            styles: promptStyles.filter((style) =>
+              flatPromptStyles.some((flatStyle) => flatStyle.styleId === style.id),
+            ),
+          });
+          // 设置默认风格为矢量线条风格
+          this.setPromptStyle({
+            prompt: promptStyles.find(style => style.id === 1330).prompt || "创意风格为【矢量线条风格】",
+          })
+        } else {
+          this.setData({
+            styles: promptStyles,
+          });
+        }
+      }
+    },
+    closeStyleSelector() {
+      this.setData({
+        show: false,
+      });
+    },
+    onStyleClick(item) {
+      this.triggerEvent('styleChange', item);
+      this.toggle();
+    }
+  }
+})
+</script>
+
+<style>
+.mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999;
+  background: transparent;
+}
+
+.style-container {
+  width: 100vw;
+  overflow: scroll;
+  justify-content: flex-start;
+  animation: slideIn 0.1s ease-out forwards;
+  z-index: 1000;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.style-container::-webkit-scrollbar {
+  display: none;
+}
+
+.style-item {
+  width: 166.5rpx;
+  height: 242rpx;
+  flex-shrink: 0;
+  flex-grow: 0;
+  opacity: 1;
+  border-radius: 32rpx;
+  background: radial-gradient(474.47% 50.41% at 68.46846846846847% 0%, rgba(42, 45, 54, 1) 0%, rgba(42, 48, 53, 0) 100%), radial-gradient(293.09% 147.11% at 28.82882882882883% 0%, rgba(19, 22, 21, 1) 0%, rgba(74, 84, 67, 1) 59.62%, rgba(102, 61, 62, 1) 83.02%, rgba(52, 45, 63, 1) 100%);
+  border: 1px solid;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.style-item image {
+  width: 100%;
+  height: 100%;
+}
+
+.style-item .placeholder {
+  width: 80rpx;
+  height: 80rpx;
+}
+</style>

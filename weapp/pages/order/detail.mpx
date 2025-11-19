@@ -1,0 +1,255 @@
+<template>
+  <view class="bg-black min-h-screen text-white">
+    <nav-bar title="订单详情" isBack="{{ true }}" defaultBackBehavior="{{ false }}" bind:back="goOrderListPage" />
+
+    <view class="px-40rpx py-16rpx">
+      <view wx:if="{{ loading }}" class="flex justify-center items-center h-256rpx">
+        <text class="text-gray-400">加载中...</text>
+      </view>
+
+      <view wx:elif="{{ orderData }}">
+        <!-- 商品信息卡片 -->
+        <view class="rounded-24rpx mb-38rpx">
+          <view class="flex items-start gap-16rpx">
+            <!-- 商品图片 -->
+            <view class="w-120rpx h-120rpx rounded-12rpx overflow-hidden flex items-center justify-center shrink-0">
+              <image wx:if="{{ orderData?.order?.asset?.generatedImageUrl }}"
+                src="{{ orderData?.order?.asset?.generatedImageUrl }}" mode="aspectFill" class="w-120rpx h-120rpx"
+                bindtap="previewImage(orderData?.order?.asset?.generatedImageUrl)" />
+            </view>
+
+            <!-- 商品信息 -->
+            <view class="flex-1">
+              <text class="text-white font-medium mb-16rpx block">{{ orderData?.order?.productName }}</text>
+              <view class="flex flex-wrap items-center gap-12rpx mb-8rpx">
+                <view wx:if="{{ orderData?.order?.asset?.name }}"
+                  class="bg-[#171717] text-white text-24rpx px-12rpx py-6rpx rounded">
+                  {{ orderData?.order?.asset?.name }}
+                </view>
+                <view wx:if="{{ orderData?.order?.asset?.craftType }}"
+                  class="bg-[#171717] text-white text-24rpx px-12rpx py-6rpx rounded">
+                  {{ orderData?.order?.asset?.craftType }}
+                </view>
+                <view wx:if="{{ orderData?.order?.asset?.nfcContent }}"
+                  class="bg-[#171717] text-white text-24rpx px-12rpx py-6rpx rounded">
+                  NFC
+                </view>
+                <view class="bg-[#171717] text-gray-300 text-24rpx px-12rpx py-6rpx rounded">
+                  {{ orderData?.order?.asset?.processingConfig?.processType || '快速模式' }}
+                </view>
+                <view class="bg-[#171717] text-gray-300 text-24rpx px-12rpx py-6rpx rounded">
+                  x{{ orderData?.order?.quantity }}
+                </view>
+              </view>
+            </view>
+
+            <!-- 价格 -->
+            <view class="text-white text-50rpx font-bold">¥{{ orderData?.order?.payAmount }}</view>
+          </view>
+        </view>
+
+        <!-- 取件码 -->
+        <view wx:if="{{ isReadyForPickupOrder }}" class="pb-20rpx mb-30rpx text-white"
+          style="border-bottom: 1px solid #2b2b2b;">
+          <text class="text-white font-medium mb-8rpx px-12rpx py-6rpx rounded bg-[#171717] text-24rpx">取件码</text>
+          <text class="block pt-10rpx text-64rpx">{{ pickupCode }}</text>
+        </view>
+
+        <view wx:elif="{{ isDetainOrder }}" class="pb-20rpx mb-30rpx text-white"
+          style="border-bottom: 1px solid #2b2b2b;">
+          <text class="text-white font-medium mb-8rpx px-12rpx py-6rpx rounded bg-[#171717] text-24rpx">状态</text>
+          <view class="text-white text-28rpx block pt-10rpx">当前成品仓已满，您的作品已被取出，请联系工作人员 [
+            <text bindlongtap="phoneCall">{{ orderData?.order?.device?.contact }}</text>]
+          </view>
+        </view>
+
+        <!-- 订单信息 -->
+        <view class="mb-38rpx" wx:elif="{{ isTrackingOrder }}">
+          <text class="text-white font-medium mb-8rpx block">订单跟踪</text>
+          <text class="text-[#757575] text-28rpx">#{{ orderData?.order?.orderSn }}</text>
+        </view>
+        <!-- <view class="mb-38rpx" wx:else>
+          <view class="bg-[#171717] inline-block text-gray-300 text-28rpx px-16rpx py-8rpx rounded-[16rpx]">
+            取件码
+          </view>
+          <text class="text-[#FFFFFF] block font-bold text-64rpx">{{ orderData?.order?.pickupCode }}</text>
+        </view> -->
+
+        <!-- 订单进度 -->
+        <view class="mb-80rpx" wx:if="{{ trackSteps && trackSteps?.length > 0 }}">
+          <view wx:for="{{ trackSteps }}" wx:key="id" class="flex items-start gap-12rpx mb-10rpx">
+            <!-- 进度点 -->
+            <view class="flex flex-col items-center mr-20rpx">
+              <view
+                class="w-12rpx h-12rpx rounded-full mt-30rpx {{ item?.type === 'tracking' ? 'bg-[#4634DF]' : 'bg-[#757575]' }}">
+              </view>
+              <view wx:if="{{ index < trackSteps?.length - 1 }}" class="w-2rpx h-70rpx bg-gray-600 mt-30rpx">
+              </view>
+            </view>
+
+            <!-- 步骤信息 -->
+            <view class="flex-1" wx:if="{{ item?.type === 'tracking' }}">
+              <text class="text-white font-medium block pb-10rpx">{{ item?.remark }}</text>
+              <text class="text-[#757575] text-28rpx">{{ item?.createTime }} | 耗时{{ item?.duration }}</text>
+            </view>
+            <view class="flex-1" wx:if="{{ item?.type === 'preview' }}">
+              <text class="text-[#757575] font-medium block pb-10rpx">{{ item?.remark }}</text>
+              <text class="text-[#757575] text-28rpx">预计等待{{ item?.duration }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <view wx:else class="flex justify-center items-center h-256rpx">
+        <text class="text-gray-400">未找到订单信息</text>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+import { OrderTrackingRes, OrderPreviewType } from '@/types/order';
+import { getOrderTracking } from '@/api/order';
+import { OrderStatus } from '@/types/order';
+import { formatDurationBySecond } from '@/utils/common';
+import { getTemplateDetail } from '@/api/template';
+
+interface DetailData {
+  orderData: OrderTrackingRes
+  loading: boolean
+  orderSn: string
+}
+
+createPage({
+  data(): DetailData {
+    return {
+      orderData: {} as OrderTrackingRes,
+      loading: false,
+      orderSn: '',
+    }
+  },
+
+  computed: {
+    isReadyForPickupOrder() {
+      return this.orderData?.order?.status === OrderStatus.READY_FOR_PICKUP;
+    },
+    isTrackingOrder() {
+      return this.orderData?.order?.status !== OrderStatus.READY_FOR_PICKUP;
+    },
+    isDetainOrder() {
+      return this.orderData?.order?.status === OrderStatus.DETAIN;
+    },
+    pickupCode() {
+      return this.orderData?.order?.pickupCode || '无';
+    },
+    trackSteps() {
+      let steps: any[] = []
+      if (this.orderData.tracking && this.orderData.tracking.length > 0) {
+        steps.push(...this.orderData.tracking);
+      }
+      if (this.orderData.preview && this.orderData.preview.length > 0) {
+        steps.push(...this.orderData.preview);
+      }
+      return steps;
+    }
+  },
+
+  onLoad(options: { orderSn?: string }) {
+    if (options.orderSn) {
+      this.orderSn = options.orderSn;
+      this._getOrderTracking();
+    }
+  },
+
+  methods: {
+    async _getOrderTracking() {
+      try {
+        this.loading = true;
+
+        const res = await getOrderTracking(this.orderSn);
+        if (res.code === 0 && res.data) {
+          const { tracking = [], preview = [], order } = res.data;
+          this.orderData = res.data;
+          this.orderData.tracking = tracking.map(step => ({
+            ...step,
+            type: OrderPreviewType.Tracking,
+            duration: formatDurationBySecond(step.duration as number)
+          }));
+          this.orderData.preview = preview.map(step => ({
+            ...step,
+            id: new Date().getTime(),
+            type: OrderPreviewType.Preview,
+            duration: formatDurationBySecond(step.duration as number)
+          }));
+
+          if (order.asset.templateId) {
+            const res = await getTemplateDetail(order.asset.templateId);
+            if (res.code === 0 && res.data) {
+              order.asset.craftType = res.data.craftType;
+              order.asset.name = res.data.name;
+            }
+          }
+
+        } else {
+          wx.showToast({
+            title: res.message || '获取订单信息失败',
+            icon: 'error'
+          });
+        }
+      } catch (error) {
+        console.error('获取订单详情失败:', error);
+      } finally {
+        this.loading = false;
+      }
+    },
+
+    goOrderListPage() {
+      const pages = getCurrentPages();
+
+      if (pages.length > 1) {
+        const prevPage = pages[pages.length - 2];
+        // 检查上一页是否是订单列表页
+        if (prevPage.route === 'pages/order/index') {
+          // 上一页是订单列表，直接返回
+          wx.navigateBack();
+        } else {
+          // 上一页不是订单列表，跳转到订单列表
+          wx.switchTab({ url: '/pages/order/index' });
+        }
+      } else {
+        // 只有一个页面，跳转到订单列表
+        wx.switchTab({ url: '/pages/order/index' });
+      }
+    },
+
+    phoneCall() {
+      if (this.orderData?.order?.device?.contact) {
+        wx.makePhoneCall({
+          phoneNumber: this.orderData?.order?.device?.contact
+        });
+      }
+    },
+
+    confirmAction() {
+      // 确认取件操作
+      this.goOrderListPage();
+    },
+
+    previewImage(src: string) {
+      wx.previewImage({
+        current: src,
+        urls: [src]
+      });
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+  {
+    "usingComponents": {
+      "van-button": "@vant/weapp/button/index"
+    }
+  }
+</script>

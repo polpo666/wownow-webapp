@@ -1,0 +1,170 @@
+<template>
+  <bg />
+  <view class="flex flex-col h-screen pb-[env(safe-area-inset-bottom)]">
+    <nav-bar title="智能体商店" isBack="true" />
+    <view class="flex-1 overflow-y-auto overflow-x-hidden p-32rpx">
+      <view class="grid grid-cols-2 gap-16rpx">
+        <view wx:for="{{ agentList }}" wx:key="id" wx:for-item="agent" wx:for-index="agentIndex"
+          class="h-[444rpx] rounded-32rpx overflow-hidden relative"
+          style="background: radial-gradient(52.98% 50% at 50% 50%, rgba(79, 79, 79, 1) 0%, rgba(33, 33, 33, 1) 100%);">
+          <view class="w-full h-full" bind:tap="toggleAgentItem(agent)">
+            <image src="{{ agent.coverUrl }}" mode="aspectFill" class="w-full h-full rounded-16rpx"
+              bind:error="handleImageError" data-index="{{ agentIndex }}"
+              wx:if="{{ agent.coverUrl && !agent.coverUrlError }}" />
+            <!-- 加载失败或无图片时显示占位图 -->
+            <view wx:if="{{ !agent.coverUrl || agent.coverUrlError }}"
+              class="absolute top-25% left-1/2 -translate-x-1/2">
+              <image src="../../../assets/svgs/icon-nfc-agent.svg" mode="aspectFit"
+                class="w-120rpx h-120rpx opacity-60" />
+            </view>
+          </view>
+
+          <view class="absolute left-0 bottom-0 w-full p-16rpx">
+            <view class="text-[#0D0D0D] text-32rpx font-medium truncate mb-16rpx">{{ agent.name }}</view>
+            <van-button plain block custom-class="!bg-transparent !rounded-102rpx !text-32rpx !font-medium !h-62rpx"
+              color="#0D0D0D" bind:click="navigateToDetail" data-agent="{{ agent }}">
+              详情
+            </van-button>
+          </view>
+
+          <image src="../../../assets/svgs/icon-checked-fill.svg"
+            wx:if="{{ selectedAgent && agent.id === selectedAgent.id }}" mode="aspectFit"
+            class="w-48rpx h-48rpx absolute top-16rpx right-16rpx" />
+
+          <view wx:if="{{ selectedAgent && agent.id !== selectedAgent.id }}"
+            class="absolute top-0 left-0 w-full h-full bg-black/50" bind:tap="toggleAgentItem(agent)"></view>
+        </view>
+      </view>
+    </view>
+    <view class="p-32rpx">
+      <van-button type="primary" block
+        custom-class="{{ !selectedAgent && '!bg-#7A7A7A !border-#7A7A7A !text-#A6A6A6 !opacity-100' }}"
+        bindtap="handleComplete" disabled="{{ !selectedAgent }}">
+        选择
+      </van-button>
+    </view>
+  </view>
+
+  <emotion-words-modal
+    show="{{ showEmotionWordsModal }}"
+    agent="{{ selectedAgent }}"
+    bind:close="onClose"
+    bind:confirm="onEmotionWordsConfirm"
+  />
+</template>
+
+<script lang="ts">
+import { getNfcAgentList } from "@/api/nfc";
+import { useProduceStore } from "@/store";
+import { NfcAgent } from "@/types";
+import { createPage } from "@mpxjs/core";
+import { mapActions, mapState } from "@mpxjs/pinia";
+
+createPage({
+  data: {
+    agentList: [] as NfcAgent[],
+    selectedAgent: null as NfcAgent | null,
+    showEmotionWordsModal: false,
+  },
+  computed: {
+    ...mapState(useProduceStore, ["nfcContent"]),
+  },
+
+  async onLoad() {
+    await this.fetchNfcAgentList();
+
+    // 从 store 中恢复链接内容
+    if (this.nfcContent && this.nfcContent.agent) {
+      this.setData({ selectedAgent: this.nfcContent.agent });
+    }
+  },
+
+  methods: {
+    ...mapActions(useProduceStore, ["setNfcContent", "saveToStorage"]),
+
+    onClose() {
+      this.setData({ showEmotionWordsModal: false });
+    },
+
+    async fetchNfcAgentList() {
+      try {
+        const res = await getNfcAgentList();
+        if (res.code === 0 && res.data) {
+          this.setData({ agentList: res.data.list });
+        } else {
+          wx.showToast({ title: res.message || "获取智能体列表失败", icon: "error", duration: 2000 });
+        }
+      } catch (err) {
+        console.error("获取智能体列表失败:", err);
+        wx.showToast({ title: "获取智能体列表失败", icon: "error", duration: 2000 });
+      }
+    },
+
+    toggleAgentItem(agent: NfcAgent) {
+      this.setData({
+        selectedAgent: this.data.selectedAgent?.id === agent.id ? undefined : agent,
+      });
+    },
+
+    navigateToDetail(e: WechatMiniprogram.BaseEvent) {
+      const agent = e.currentTarget.dataset.agent;
+      const agentStr = encodeURIComponent(JSON.stringify(agent));
+      wx.navigateTo({
+        url: `/subPackages/nfc/agent/detail?agent=${agentStr}`,
+      });
+    },
+
+    handleComplete() {
+      if (!this.data.selectedAgent) return;
+
+      const { selectedAgent } = this.data;
+
+      if (selectedAgent.name.includes("情绪电台") && selectedAgent.metadata) {
+        this.setData({ showEmotionWordsModal: true });
+      } else {
+        this.setNfcContent({
+          type: "agent",
+          link: selectedAgent?.url || "",
+          text: "",
+          attachments: [],
+          agent: selectedAgent ?? undefined,
+        });
+        this.saveToStorage();
+        wx.navigateBack();
+      }
+    },
+
+    handleImageError(e: WechatMiniprogram.BaseEvent) {
+      const index = e.currentTarget.dataset.index;
+      const agentList = [...this.data.agentList];
+      if (agentList[index]) {
+        agentList[index].coverUrlError = true;
+        this.setData({ agentList });
+      }
+    },
+
+    onEmotionWordsConfirm(e: any) {
+      this.setNfcContent({
+        type: "agent",
+        link: `${this.data.selectedAgent?.url}podcast/${e.detail.channelId}`,
+        text: "",
+        attachments: [],
+        agent: this.data.selectedAgent ?? undefined,
+      });
+      this.saveToStorage();
+      wx.navigateBack();
+    },
+  },
+});
+</script>
+
+<style lang="stylus"></style>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "emotion-words-modal": "../components/emotion-words-modal",
+  }
+}
+</script>

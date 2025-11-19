@@ -1,0 +1,166 @@
+<template>
+  <view class="h-screen flex flex-col">
+    <bg />
+    <nav-bar title="我的优惠券" isBack="{{ true }}" />
+
+    <!-- Tab 切换 -->
+    <view class="flex gap-16rpx px-30rpx pt-30rpx pb-16rpx">
+      <view class="flex-1" wx:for="{{ tabList }}" wx:key="index">
+        <van-button 
+          block 
+          type="primary"
+          custom-class="!h-76rpx rounded-24rpx !font-medium !text-32rpx !border-none {{activeTab === item.key ? '!bg-#FADA39 text-#0A0A0A' : '!bg-#232323 !text-white'}}"
+          bind:click="onTabChange(item.key)"
+        >
+          {{ item.title }}
+        </van-button>
+      </view>
+    </view>
+
+    <!-- 优惠券列表 -->
+    <view class="flex-1 overflow-y-auto overflow-x-hidden">
+      <scroll-view 
+        scroll-y 
+        class="h-full" 
+        refresher-enabled="{{ true }}"
+        refresher-triggered="{{ isRefreshing }}"
+        bindrefresherrefresh="onRefresh"
+        refresher-default-style="white"
+      >
+        <view class="px-30rpx pt-16rpx h-full">
+          <view 
+            wx:if="{{ isLoading && coupons[activeTab] === null }}"
+            class="flex items-center justify-center h-full"
+          >
+            <van-loading size="24px" vertical type="spinner">加载中...</van-loading>
+          </view>
+
+          <view 
+            wx:elif="{{ !coupons[activeTab] || coupons[activeTab]?.length === 0 }}"
+            class="flex flex-col items-center justify-center h-full gap-24rpx"
+          >
+            <image src="../../../assets/base/no-data.png" class="w-180rpx h-180rpx" mode="aspectFit" />
+            <view class="text-28rpx text-#9C9C9C">暂无优惠券</view>
+          </view>
+
+          <block wx:else>
+            <view wx:for="{{ coupons[activeTab] }}" wx:key="id" class="mb-24rpx">
+              <coupon-item coupon="{{ item }}" bind:showRule="showRuleContent" />
+            </view>
+          </block>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 底部兑换按钮 -->
+    <view class="px-30rpx pt-24rpx pb-[calc(env(safe-area-inset-bottom)+24rpx)]">
+      <van-button type="primary" custom-class="w-full !border-none !bg-#FADA39 !text-#0A0A0A" bind:tap="goToRedemption">
+        兑换优惠券
+      </van-button>
+    </view>
+
+    <rule-popup 
+      show="{{ showRulePopup }}" 
+      title="活动规则" 
+      bind:close="onCloseRulePopup"
+    >
+      <view class="text-center text-28rpx py-48rpx text-#7c7c7c break-all whitespace-pre-wrap">{{ ruleContent || "暂无使用说明" }}</view>
+    </rule-popup>
+  </view>
+</template>
+
+<script lang="ts">
+import { getCouponList } from "@/api/promotion";
+import { UserCoupon, CouponStatus } from "@/types";
+import { createPage } from "@mpxjs/core";
+
+type TabItem = {
+  key: CouponStatus;
+  title: string;
+};
+
+createPage({
+  data: {
+    isLoading: false,
+    activeTab: "unused" as CouponStatus,
+    tabList: [
+      { key: "unused", title: "未使用" },
+      { key: "used", title: "已使用" },
+      { key: "expired", title: "已过期" },
+    ] as TabItem[],
+    coupons: {
+      "unused": null as UserCoupon[] | null,
+      "used": null as UserCoupon[] | null,
+      "expired": null as UserCoupon[] | null,
+    } as Record<CouponStatus, UserCoupon[] | null>,
+    isRefreshing: false, // 下拉刷新状态
+    showRulePopup: false,
+    ruleContent: '',
+  },
+  onShow() {
+    this.fetchCouponList(this.activeTab);
+  },
+  methods: {
+    async fetchCouponList(status: CouponStatus) {
+      this.isLoading = true;
+      try {
+        const res = await getCouponList({ page: 1, pageSize: 100, status });
+        if (res.code === 0 && res.data?.list) {
+          this.coupons[status] = res.data.list || [];
+        } else {
+          console.warn('Failed to fetch coupons: ', res);
+        }
+      } catch (error) {
+        console.error('Failed to fetch coupons: ', error);
+        wx.showToast({ title: "加载失败:" + (error.errMsg || "未知错误"), icon: "none" });
+        throw new Error(error.errMsg || "未知错误");
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    async onRefresh() {
+      this.isRefreshing = true;
+      try {
+        await this.fetchCouponList(this.activeTab);
+        wx.showToast({ title: "刷新成功", icon: "none" });
+      } catch (error) {
+        console.error('刷新失败:', error);
+      } finally {
+        this.isRefreshing = false;
+      }
+    },
+
+    onTabChange(key: CouponStatus) {
+      this.activeTab = key;
+      this.fetchCouponList(key);
+    },
+
+    goToRedemption() {
+      wx.navigateTo({
+        url: "/subPackages/user/coupon/redemption",
+      });
+    },
+
+    onCloseRulePopup() {
+      this.showRulePopup = false;
+    },
+
+    showRuleContent(event: { detail: { content: string } }) {
+      this.ruleContent = event.detail.content;
+      this.showRulePopup = true;
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-loading": "@vant/weapp/loading/index",
+    "coupon-item": "@/components/user-coupon/coupon-item",
+    "rule-popup": "@/components/user-coupon/rule-popup"
+  }
+}
+</script>

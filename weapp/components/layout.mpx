@@ -1,0 +1,55 @@
+<template>
+  <view>
+    <slot></slot>
+    <login-modal 
+      wx:if="{{ shouldShowModal }}"
+      bind:loginSuccess="handleLoginSuccess" 
+    >
+    </login-modal>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core';
+import { useAuthStore } from '@/store';
+import { mapState } from '@mpxjs/pinia';
+import { getCurrentPageRoute } from '@/utils/page';
+
+createComponent({
+   data: {
+    currentPageRoute: ''
+  },
+  
+  attached() {
+    // 自动获取当前页面路由
+    this.currentPageRoute = getCurrentPageRoute();
+  },
+  
+  computed: {
+    ...mapState(useAuthStore, ['showLoginModal', 'currentLoginPage']),
+    
+    shouldShowModal() {
+      // 只有当弹窗需要显示且是当前页面时才显示
+      return this.showLoginModal && (
+        this.currentLoginPage === this.currentPageRoute ||
+        !this.currentLoginPage // 兼容没有指定页面的情况
+      );
+    }
+  },
+  methods: {
+    handleLoginSuccess() {
+      // 登录成功后的处理逻辑
+      this.triggerEvent && this.triggerEvent('loginSuccess');
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "login-modal": "./login-modal"
+  }
+}
+</script>

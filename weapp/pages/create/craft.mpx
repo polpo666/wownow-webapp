@@ -1,0 +1,173 @@
+<template>
+  <layout>
+    <view class="flex flex-col h-screen pb-[env(safe-area-inset-bottom)]">
+      <bg />
+      <nav-bar title="选择工艺" isBack="{{ true }}" />
+      <!-- <category-list class="flex-1 overflow-auto" bind:back="onBack" /> -->
+      <view class="flex flex-col flex-1 overflow-y-auto">
+        <view class="flex-1 overflow-y-auto p-32rpx">
+          <view wx:if="{{ crafts.length === 0 }}" class="flex justify-center items-center h-40">
+            <text class="text-gray-500">暂无数据</text>
+          </view>
+          <view wx:else class="grid grid-cols-2 gap-2 ">
+            <view wx:for="{{ crafts }}" wx:key="id" item="{{ item }}" bindtap="selectTemplate" class="rounded-lg"
+              style="border: 1px solid {{ item.isSelected ? '#FADA39' : 'transparent' }}; background: radial-gradient(50% 49.76% at 50% 50.23923444976076%, hsl(0, 0%, 31%) 0%, hsl(0, 0%, 13%) 100%)"
+              data-item="{{ item }}">
+              <view class="h-32 p-8rpx flex justify-center items-center">
+                <image wx:if="{{ item.templates.coverUrl }}"
+                  src="{{ item.templates.coverUrl + '?x-oss-process=image/resize,p_50' }}" mode="aspectFit"
+                  class="w-full h-full object-contain" />
+                <image wx:else src="{{ placeholderImg }}" mode="aspectFit" class="size-9 object-contain" />
+              </view>
+              <view class="text-white  py-[10px] px-[15px] flex justify-center items-center gap-2">
+                <text class="text-[26rpx] font-medium">{{ item.category.name }}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+        <van-button id="start-chat" disabled="{{ disabled }}" type="primary" class="px-3" block bind:click="onStartChat"
+          custom-class="my-16rpx"
+          custom-style="border: none; {{ disabled ? 'background-color: #ccc !important; color: #A6A6A6' : '' }}">开启创作</van-button>
+      </view>
+      <user-guide wx:if="{{ isLoggedIn }}" options="{{ guideData }}" bind:stepChange="onGuideStepChange"
+        bind:end="onGuideEnd" />
+    </view>
+  </layout>
+</template>
+
+<script>
+import { tabSwitcher } from "@/custom-tab-bar/tabbar";
+import { createPage } from "@mpxjs/core";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { useAuthStore, useChatStore } from "@/store";
+
+createPage({
+  data: {
+    crafts: [],
+    guideData: [
+      {
+        selector: '#start-chat',
+        tips: '平雕的细腻、浮雕的立体感，还是UV原汁原味的质感？挑一个最打动你的吧',
+        ref: "craftListRef",
+      },
+    ],
+  },
+  computed: {
+    ...mapState(useChatStore, ["category"]),
+    ...mapState(useAuthStore, ['isLoggedIn']),
+    disabled: function () {
+      return !this.crafts.some(item => item.isSelected)
+    }
+  },
+  watch: {
+    category: {
+      handler(newVal) {
+        this.setData({ crafts: newVal.subCategories.map(item => ({ ...item, isSelected: false })) })
+      },
+      immediate: true
+    }
+  },
+  onShow() {
+    tabSwitcher(this)
+    getApp().globalData.craftListRef = this
+  },
+  onLoad() {
+    if (this.$refs?.loginModal) {
+      this.$refs.loginModal.show()
+    }
+  },
+  methods: {
+    ...mapActions(useAuthStore, ['setShowLoginModal']),
+    ...mapActions(useChatStore, ['setChatTemplate']),
+    selectTemplate(e) {
+      const item = e.currentTarget.dataset.item
+      this.setData({
+        crafts: this.data.crafts.map(craftItem => {
+          return { ...craftItem, isSelected: item.templates.id === craftItem.templates.id }
+        })
+      })
+    },
+    onStartChat() {
+      if (!this.isLoggedIn) {
+        const that = this;
+        wx.showModal({
+          title: '提示',
+          content: '您还未登录，请先登录',
+          confirmText: '登录',
+          cancelText: '取消',
+          success(res) {
+            if (res.confirm) {
+              that.setShowLoginModal(true);
+            }
+          }
+        })
+        return
+      }
+      this.setChatTemplate(this.data.crafts.find(item => item.isSelected).templates)
+      wx.redirectTo({
+        url: '/subPackages/chat/index',
+      })
+    },
+  }
+});
+</script>
+
+<style lang="stylus">
+.van-tabs--line
+  height auto !important
+
+.van-tabs__content
+  flex 1
+
+.container
+  padding 40rpx
+
+  .header
+    text-align center
+    margin-bottom 60rpx
+
+    .title
+      display block
+      font-size 48rpx
+      font-weight bold
+      color #ffffff
+      margin-bottom 20rpx
+
+    .subtitle
+      display block
+      font-size 28rpx
+      color #e0e0e0
+
+  .content
+    display flex
+    flex-direction column
+    align-items center
+
+    .login-btn
+      width 400rpx
+      height 88rpx
+      font-size 32rpx
+
+    .user-info
+      display flex
+      flex-direction column
+      align-items center
+
+      .welcome-text
+        font-size 32rpx
+        color #ffffff
+        margin-bottom 40rpx
+
+      .logout-btn
+        width 300rpx
+        height 80rpx
+        font-size 28rpx
+</style>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index"
+  }
+}
+</script>

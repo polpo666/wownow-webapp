@@ -1,0 +1,43 @@
+<template>
+  <view>
+    <bg />
+    <nav-bar title="授权" />
+    <view class="mt-200px flex flex-col items-center justify-center">
+      <van-button type="primary" size="small" bind:tap="onAuth">授权</van-button>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+
+createPage({
+  data: {
+    logo: '../../assets/user/logo.png',
+    user_id: ""
+  },
+  onLoad(options) {
+    console.log('options: ', options)
+    this.setData({
+      user_id: options.user_id
+    })
+  },
+  methods: {
+    onAuth() {
+      wx.login({
+        success: (res) => {
+          console.log(res)
+        }
+      })
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index"
+  }
+}
+</script>

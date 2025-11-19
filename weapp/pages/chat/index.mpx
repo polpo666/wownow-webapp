@@ -1,0 +1,328 @@
+<template>
+  <layout>
+
+    <view class="h-[100vh] flex flex-col" disable-scroll="{{ true }}">
+      <bg />
+      <nav-bar title="新建创作" defaultBackBehavior="{{ false }}" bind:back="onBack"
+        subTitle="{{ chatTemplate ? chatTemplate.name + ', ' + chatTemplate.craftType : '' }}" isBack="true" />
+      <view class="flex justify-end px-4 py-2">
+        <van-button id="order-production" type="primary" size="small"
+          custom-class="w-full rounded-[10px]! border-transparent!"
+          custom-style="{{ !canProduce ? 'background-color: #ccc !important;' : '' }}" :disabled="{{ !canProduce }}"
+          bind:click="onOrderProduction">
+          下单生产
+        </van-button>
+      </view>
+      <view class="flex-1 overflow-auto">
+        <agent-ui ref="agentUiRef" id="agent-ui" agentConfig="{{ agentConfig }}" showBotAvatar="{{ showBotAvatar }}"
+          inputValue="{{ inputValue }}" templateImage="{{ attachment?.url }}"
+          bind:updateChatRecords="onUpdateChatRecords" bind:inputValueChanged="onInputValueChanged"
+          bind:clearPromptStyle="onClearPromptStyle" bind:imgTap="handleImgTap" chatMode="{{ chatMode }}"
+          placeholder="描述你要创作的内容" modelConfig="{{ modelConfig }}" envShareConfig="{{ envShareConfig }}"
+          generateImageOptions="{{ generateImageOptions }}">
+          <view name="input_top" class="flex flex-row flex-wrap items-end gap-2 py-2 relative">
+            <style-selector id="style-selector" bind:styleChange="onStyleChange" />
+            <template-selector id="template-selector" bind:templateChange="onTemplateChange" />
+            <!-- <prompt-selector id="prompt-selector" bind:changed="onPromptChanged" /> -->
+            <view id="prompt-selector"
+              class="rounded-lg text-white text-[13px] flex justify-center items-center px-2 py-1 gap-2"
+              style="border: 1px solid #575757;" bindtap="onPromptClick">
+              <image class="w-23rpx h-23rpx" src="../../assets/prompt.png" mode="aspectFill" />
+              提示词
+            </view>
+            <!-- <category-popup id="category-popup"></category-popup> -->
+            <category-button />
+          </view>
+        </agent-ui>
+      </view>
+      <user-guide wx:if="{{ isLoggedIn }}" options="{{ guideData }}" bind:stepChange="onGuideStepChange"
+        bind:end="onGuideEnd" />
+    </view>
+  </layout>
+</template>
+
+<script lang="ts">
+import { createPage } from "@mpxjs/core";
+import { tabSwitcher } from "@/custom-tab-bar/tabbar";
+import { GenerateImageOptions } from "@/types/base";
+import { templateConfigs } from "@/lib/mock-data";
+import { TemplateLabel, WownowPromptStyle } from "@/types";
+import { COIN_NEGATIVE_PROMPT } from "@/lib/constants";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { useAuthStore, useChatStore } from "@/store";
+import { OrientationType } from "@/types/asset";
+
+const COMMA = "，"
+const promptStyleRegex = /^创意风格为【(.*?)】，?/;
+const promptTemplateRegex = /模板为【(.*?)】，?/;
+
+// 清理连续的逗号，并去除首尾空白和逗号
+const normalizeInputValue = (value: string): string => {
+  return value
+    .replace(/，+/g, COMMA)  // 将连续的逗号替换为单个逗号
+    .replace(/^，+|，+$/g, '')  // 去除首尾的逗号
+    .trim();
+};
+
+createPage({
+  data: {
+    guideData: [
+      {
+        selector: '#image-upload-btn',
+        tips: '你可以上传一张图片，我会帮你：换不同的艺术风格或在它的基础上生成新作品',
+        ref: "agentUiRef",
+        tipPosition: 'top'
+      },
+      {
+        selector: '#style-selector',
+        tips: '点击下方的风格，挑一个你喜欢的画风，作品会立刻变身',
+        tipPosition: 'top'
+      },
+      {
+        selector: '#template-selector',
+        tips: '想要同款写真？点「模版」，选择场景并上传照片即可自动合成。',
+        tipPosition: 'top'
+      },
+      {
+        selector: '#prompt-selector',
+        tips: '不知道写什么？在提示词里挑一条灵感，直接点一下就能开始',
+        tipPosition: 'top'
+      },
+      {
+        selector: '#category-popup',
+        tips: '如果想换其他类别或工艺，可以点击切换品类 回到上一步重新选择',
+        tipPosition: 'top'
+      },
+      {
+        selector: '#order-production',
+        tips: '如果这张图已经符合你的期待，就点击 下单生产，让它从灵感变成现实吧',
+        tipPosition: 'bottom'
+      }
+    ],
+    chatMode: "model", // model
+    showBotAvatar: false,
+    agentConfig: {
+      botId: "bot-e7d1e736", // agent id,
+      allowWebSearch: true, // 允许客户端选择启用联网搜索
+      allowUploadFile: true, // 允许上传文件
+      allowPullRefresh: true, // 允许下拉刷新
+      allowUploadImage: true, // 允许上传图片
+      showToolCallDetail: true, // 是否展示工具调用细节
+      allowMultiConversation: true, // 是否展示会话列表，创建会话按钮
+    },
+    modelConfig: {
+      modelProvider: "hunyuan-open", // 大模型服务厂商
+      quickResponseModel: "hunyuan-lite", // 大模型名称 （混元 turbo, gpt4 turbo版，deepseek v3等）
+      logo: "", // model 头像
+      welcomeMsg: "", // model 欢迎语
+    },
+    inputValue: "",
+    showViewer: false,
+    imgSrc: "",
+  },
+  computed: {
+    ...mapState(useChatStore, ["chatTemplate", "promptStyle", "templatePrompt", "attachment", "outputList", "chatRecords", "prompts"]),
+    ...mapState(useAuthStore, ['isLoggedIn']),
+    canProduce: function () {
+      return this.outputList.some((item: any) => item.role === 'assistant' && item.imageUrl);
+    },
+    generateImageOptions: function (): GenerateImageOptions {
+      const config = templateConfigs.find(item => item.label === this.chatTemplate?.label)
+      const negativePrompt =
+        this.chatTemplate?.label === TemplateLabel.FlatCoin ||
+          this.chatTemplate?.label === TemplateLabel.ReliefCoin
+          ? COIN_NEGATIVE_PROMPT
+          : '';
+      const width = (this.chatTemplate?.orientation === OrientationType.LANDSCAPE ? config?.height : config?.width) || 1024
+      const height = (this.chatTemplate?.orientation === OrientationType.LANDSCAPE ? config?.width : config?.height) || 1024
+      // const placeholderUrl = (this.chatTemplate?.orientation === OrientationType.LANDSCAPE ? productCategory?.placeholderUrl + `?x-oss-process=image/rotate,90` : productCategory?.placeholderUrl) || ""
+      const ratio = this.chatTemplate?.aspectRatio;
+      const options = {
+        templateId: this.chatTemplate?.id,
+        defaultPrompt: this.chatTemplate?.prompt,
+        stylePrompt: this.promptStyle?.prompt || '',
+        templatePrompt: this.templatePrompt?.prompt || '',
+        productType: this.chatTemplate?.label,
+        width,
+        height,
+        // placeholderUrl,
+        negativePrompt,
+        ratio,
+      }
+      return options
+    }
+  },
+  watch: {
+    prompts: {
+      handler(newPrompts, oldPrompts) {
+        this.onPromptChanged(newPrompts, oldPrompts)
+      },
+      immediate: true
+    }
+  },
+  onShow() {
+    tabSwitcher(this);
+  },
+  onLoad() {
+    if (this.chatRecords.length > 0) {
+      this.selectComponent('#agent-ui').recoverChatRecords(this.chatRecords)
+    }
+  },
+  methods: {
+    ...mapActions(useChatStore, [
+      'setPromptStyle',
+      'setTemplatePrompt',
+      'setChatTemplate',
+      'setOutputList',
+      'setChatRecord',
+      'resetChatStore',
+    ]),
+    onOrderProduction() {
+      if (!this.canProduce) return
+      wx.navigateTo({
+        url: "/pages/create/preview?src=" + encodeURIComponent(this.outputList[0]?.imageUrl),
+      })
+    },
+    onPromptClick() {
+      wx.navigateTo({
+        url: "/pages/create/prompt"
+      })
+    },
+    onStyleChange(item: WechatMiniprogram.CustomEvent) {
+      const { name } = item.detail as WownowPromptStyle
+      const currentValue = this.data.inputValue
+
+      let newValue: string
+      if (promptStyleRegex.test(currentValue)) {
+        newValue = currentValue.replace(promptStyleRegex, `创意风格为【${name}】` + COMMA)
+      } else {
+        const separator = currentValue.length > 0 ? COMMA : ''
+        newValue = `${currentValue}${separator}创意风格为【${name}】` + COMMA
+      }
+      this.setData({
+        inputValue: normalizeInputValue(newValue),
+      })
+      this.setPromptStyle(item.detail as WownowPromptStyle)
+    },
+    onTemplateChange(item: WechatMiniprogram.CustomEvent) {
+      const { name } = item.detail;
+      const currentValue = this.data.inputValue;
+
+      let newValue: string;
+      if (promptTemplateRegex.test(currentValue)) {
+        newValue = currentValue.replace(promptTemplateRegex, `模板为【${name}】` + COMMA);
+      } else {
+        const separator = currentValue.length > 0 ? COMMA : '';
+        newValue = `${currentValue}${separator}模板为【${name}】` + COMMA;
+      }
+      this.setData({
+        inputValue: normalizeInputValue(newValue),
+      })
+      this.setTemplatePrompt(item.detail as WownowPromptStyle)
+    },
+    onPromptChanged(newPrompts: any[] = [], oldPrompts: any[] = []) {
+      const addPrompts = newPrompts.filter(item => !oldPrompts.includes(item))
+      const removePrompts = oldPrompts.filter(item => !newPrompts.includes(item))
+      let inputValue = this.data.inputValue
+      removePrompts.forEach(item => {
+        inputValue = inputValue.replace(item.name, '')
+      })
+      addPrompts.forEach(item => {
+        inputValue = inputValue + COMMA + item.name
+      })
+      inputValue = inputValue.split(COMMA).filter(item => item.trim() !== '').join(COMMA)
+      this.setData({
+        inputValue,
+      })
+      // if (items.length === 0) return
+      // const originInput = this.data.inputValue
+      // const currentTags = originInput.split(COMMA).map((t) => t.trim())
+      //   .filter((t) => t.length > 0);
+      // const newTags = items.map((item: any) => item.name)
+      // const mergedTags = Array.from(new Set([...currentTags, ...newTags]));
+      // if (mergedTags.length === currentTags.length) return;
+      // this.setData({
+      //   inputValue: `${mergedTags.join(COMMA)}${COMMA}`
+      // })
+    },
+    onInputValueChanged(e: any) {
+      this.setData({
+        inputValue: e.detail,
+      })
+    },
+    onClearPromptStyle() {
+      this.setPromptStyle(null);
+    },
+    handleImgTap(e: any) {
+      console.log('e: ', e)
+      wx.navigateTo({
+        url: "/pages/create/preview?src=" + encodeURIComponent(e.detail),
+      })
+    },
+    onToolOutputAvailable(e: any) {
+      console.log('onToolOutputAvailable: ', e)
+    },
+    onUpdateChatRecords(e: any) {
+      const chatRecords = e.detail
+      this.setChatRecord(chatRecords)
+
+      const oldOutputList = this.outputList || []
+      const outputList = chatRecords.reduce((acc: any[], item: any) => {
+        if (item.role !== 'assistant') {
+          return acc
+        }
+        let imageUrl: string = ""
+        const toolCallList = item.toolCallList
+        if (toolCallList) {
+          const toolCall = toolCallList.find((toolCall: any) => toolCall.callResult)
+          if (toolCall) {
+            imageUrl = toolCall.callResult
+          }
+        }
+
+        const oldItem = oldOutputList.find((oldItem: any) => oldItem.imageUrl === imageUrl)
+        const styleId = oldItem?.styleId || this.promptStyle?.id
+
+        acc.push({
+          ...item,
+          styleId,
+          imageUrl,
+        })
+        return acc
+      }, [])
+
+      console.log('outputList: ', outputList)
+      this.setOutputList(outputList)
+      this.setPromptStyle(null)
+      this.setTemplatePrompt(null)
+    },
+    onViewerBack() {
+      this.setData({
+        showViewer: false,
+      })
+    },
+    onBack() {
+      this.resetChatStore()
+      wx.navigateBack()
+    },
+    onGuideStepChange() {
+    },
+    onGuideEnd() {
+    },
+  }
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-popup": "@vant/weapp/popup/index",
+    "style-selector": "@/components/style-selector/index",
+    "template-selector": "@/components/template-selector/index",
+    "prompt-selector": "@/components/prompt-selector/index",
+    "agent-ui": "@/components/agent-ui",
+    "category-button": "./components/category-button.mpx"
+  }
+}
+</script>

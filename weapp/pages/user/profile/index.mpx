@@ -1,0 +1,181 @@
+<template>
+  <view>
+    <bg />
+    <nav-bar title="个人资料" isBack="{{ true }}" />
+
+    <view class="overflow-auto p-30rpx">
+      <!-- 头像区域 -->
+      <view class="flex flex-col items-center mb-24rpx">
+        <button 
+          class="w-200rpx h-200rpx p-0 bg-transparent relative" 
+          open-type="chooseAvatar" 
+          bind:chooseavatar="onChooseAvatar"
+        >
+          <view class="w-200rpx h-200rpx rounded-full overflow-hidden">
+            <image wx:if="{{ avatarUrl === '' }}" class="w-full h-full" src="../../../assets/user/avatar.png" mode="aspectFit"></image>
+            <image wx:else class="w-full h-full" src="{{ avatarUrl }}" mode="aspectFill"></image>
+          </view>
+          <view class="absolute right-0 bottom-0 w-64rpx h-64rpx rounded-full">
+            <image class="w-full h-full" src="../../../assets/svgs/icon-avatar-edit.svg" mode="aspectFit" />
+          </view>
+        </button> 
+      </view>
+
+      <!-- 表单区域 -->
+      <view>
+        <!-- 昵称 -->
+        <view class="mb-40rpx">
+          <text class="block text-32rpx pb-16rpx text-#9C9C9C">昵称</text>
+          <view 
+            class="bg-[#232323] rounded-32rpx py-32rpx px-30rpx flex justify-between items-center active:opacity-80" 
+            bindtap="goEdit"
+          >
+            <text class="text-white text-28rpx">{{ isLoggedIn ? user?.nickname || "微信用户" : '--' }}</text>
+            <image class="w-40rpx h-40rpx" src="../../../assets/svgs/icon-edit.svg" mode="aspectFit" />
+          </view>
+        </view>
+
+        <view>
+          <text class="block text-32rpx pb-16rpx text-#9C9C9C">手机号</text>
+          <view class="bg-[#232323] rounded-32rpx py-32rpx px-30rpx text-white text-28rpx">
+            {{ isLoggedIn ? user?.phone : '--' }}
+          </view>
+        </view>
+      </view>
+
+      <!-- 退出登录按钮 -->
+     <view class="fixed bottom-0 left-0 w-full px-30rpx pb-[calc(env(safe-area-inset-bottom)+24rpx)]">
+        <van-button
+          type="primary"
+          custom-class="w-full"
+          bind:tap="handleLogout"
+        >
+          退出登录
+        </van-button>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+import { useAuthStore } from '@/store';
+import { mapState, mapActions } from '@mpxjs/pinia';
+import { ossUploadPresign, uploadToOSS } from '@/api/upload';
+import { Attachment } from '@/types';
+import { updateUserDetail } from '@/api/auth';
+
+createPage({
+  data: {
+    avatarUrl: ""
+  },
+  computed: {
+    ...mapState(useAuthStore, ['isLoggedIn', 'user'])
+  },
+  onLoad() {
+    if (this.isLoggedIn && this.user) {
+      this.setData({
+        avatarUrl: this.user.avatar || ""
+      });
+    }
+  },
+  methods: {
+    ...mapActions(useAuthStore, ['logout', 'setShowLoginModal', 'updateUserInfo']),
+
+    async onChooseAvatar(e: any) {
+      const { avatarUrl } = e.detail;
+      wx.showToast({ title: '上传中...', icon: 'loading',  mask: true });
+      try {
+        const uploadResult = await this.uploadFile(avatarUrl);
+        
+        if (uploadResult) {
+          const updateResponse = await updateUserDetail({ avatar: uploadResult.url });
+
+          if (updateResponse.code === 0 && updateResponse.data?.success) {
+            this.setData({ avatarUrl: uploadResult.url });
+            this.updateUserInfo({ avatar: uploadResult.url });
+
+            wx.showToast({ title: '头像更新成功', icon: 'success' });
+          } else {
+            wx.showToast({ 
+              title: updateResponse.message || '头像更新失败', 
+              icon: 'none' 
+            });
+            console.warn('Failed to update user avatar:', updateResponse);
+          }
+        }
+      } catch (error: any) {
+        wx.showToast({
+          title: error?.message || '头像更新失败',
+          icon: 'none'
+        });
+        console.error('Avatar upload failed:', error);
+      }
+    },
+
+    async uploadFile(tempFilePath: string): Promise<Attachment | null> {
+      const filename = tempFilePath.split('/').pop() || `avatar-${Date.now()}.jpg`;
+      const contentType = 'image/jpeg';
+      
+      return new Promise((resolve, reject) => {
+        // 获取文件信息
+        wx.getFileSystemManager().stat({
+          path: tempFilePath,
+          success: async (res: any) => {
+            try {
+              const presignResponse = await this.getPresignedUrl(filename, contentType, res.stats.size);
+              const { uploadUrl, publicUrl, originalFilename } = presignResponse;
+
+              await uploadToOSS(tempFilePath, uploadUrl, contentType);
+              resolve({
+                url: publicUrl,
+                name: originalFilename,
+                contentType: contentType,
+              });
+            } catch (error: any) {
+              reject(new Error(error?.message || "上传失败"));
+            }
+          },
+          fail: (error: any) => {
+            reject(new Error(`获取文件信息失败: ${error.errMsg}`));
+          }
+        });
+      });
+    },
+
+    async getPresignedUrl(filename: string, contentType: string, size: number) {
+      const response = await ossUploadPresign({ filename, contentType, size });
+      if (response.code !== 0 || !response.data) {
+        throw new Error(response.message || "获取OSS上传凭证失败");
+      }
+      return response.data;
+    },
+
+    goEdit() {
+      wx.navigateTo({ url: '/subPackages/user/profile/nickname' });
+    },
+
+    handleLogout() {
+      wx.showModal({
+        content: '确认退出登录？',
+        success: (res) => {
+          if (res.confirm) {
+            this.logout();
+            // 跳转到首页
+            wx.reLaunch({ url: '/pages/home/index' });
+          }
+        }
+      });
+    },
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}
+</script>

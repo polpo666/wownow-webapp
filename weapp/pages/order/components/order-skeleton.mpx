@@ -1,0 +1,65 @@
+<template>
+  <view class="p-30rpx">
+    <view wx:for="{{ skeletonList }}" wx:key="index" class="mb-32rpx bg-[#2B2B2B] rounded-24rpx overflow-hidden">
+      <!-- 头部信息骨架 -->
+      <view class="p-30rpx flex items-center justify-between border-b border-[#404040]">
+        <view class="h-46rpx bg-[#404040] rounded w-200rpx animate-pulse" />
+        <view class="h-32rpx bg-[#404040] rounded w-120rpx animate-pulse" />
+      </view>
+      
+      <!-- 商品信息骨架 -->
+      <view class="px-30rpx py-20rpx flex">
+        <view class="w-160rpx h-160rpx bg-[#404040] rounded-32rpx animate-pulse mr-20rpx" />
+        <view class="flex-1">
+          <view class="h-28rpx bg-[#404040] rounded w-full mb-16rpx animate-pulse" />
+          <view class="h-24rpx bg-[#404040] rounded w-[60%] mb-16rpx animate-pulse" />
+          <view class="h-24rpx bg-[#404040] rounded w-[40%] animate-pulse" />
+        </view>
+      </view>
+      
+      <!-- 底部操作按钮骨架 -->
+      <view class="px-20rpx pb-30rpx flex justify-end">
+        <view class="h-56rpx bg-[#404040] rounded w-160rpx animate-pulse" />
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core';
+
+createComponent({
+  properties: {
+    count: {
+      type: Number,
+      value: 4
+    }
+  },
+
+  data: {
+    skeletonList: [] as number[]
+  },
+
+  lifetimes: {
+    attached() {
+      this.setData({
+        skeletonList: new Array(this.data.count).fill(0)
+      });
+    }
+  },
+
+  observers: {
+    count(newVal) {
+      this.setData({
+        skeletonList: new Array(newVal).fill(0)
+      });
+    }
+  }
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true
+}
+</script>

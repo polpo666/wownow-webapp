@@ -1,0 +1,87 @@
+<template>
+  <view wx:if="{{ show }}"
+    class="custom-tab-bar bottom-0 left-0 right-0 px-24rpx pt-24rpx pb-[calc(env(safe-area-inset-bottom)+24rpx)] flex items-center z-1 justify-between bg-[#0D0D0D]">
+    <block wx:for="{{ list }}" wx:key="index">
+      <!-- categary -->
+      <view
+        class="relative flex flex-col w-112rpx h-80rpx opacity-100 rounded-20rpx bg-[#FADA39] flex items-center justify-center"
+        wx:if="{{ index == 2 }}" data-page="{{ item.pagePath }}" data-index="{{ index }}" bind:tap="onStartCreate">
+        <!-- <image class="w-27px h-27px" src="../assets/svgs/icon-wownow.svg" /> -->
+        <van-icon name="plus" size="20"></van-icon>
+      </view>
+      <!-- other -->
+      <view class="relative px-30rpx py-10rpx flex flex-col {{selected==index && 'select'}}" data-page="{{ item.pagePath }}"
+        data-index="{{ index }}" bind:tap="onchange">
+        <text class="text-28rpx font-medium {{selected==index ? 'text-white' : 'text-gray-400'}}">{{ item.text }} </text>
+        <view class="h-6rpx w-80% mx-auto mt-8rpx rounded-4rpx {{selected==index ? 'bg-[#FADA39]' : 'bg-transparent'}}">
+        </view>
+      </view>
+    </block>
+  </view>
+</template>
+
+<script>
+import mpx, { createComponent } from '@mpxjs/core'
+import { tabarConfig, setCustomTabBarHeight } from './tabbar'
+import { useChatStore, useAuthStore } from '@/store'
+import { mapActions } from '@mpxjs/pinia'
+
+createComponent({
+  properties: {
+  },
+  data: {
+    list: tabarConfig,
+    selected: 0,
+  },
+  computed: {
+    show() {
+      if (getCurrentPages().length > 0) {
+        const { route } = getCurrentPages()[0]
+        return tabarConfig.find(item => item.pagePath === route)
+      }
+      return true
+    }
+  },
+  ready() {
+    // 存储custom-tab-bar高度
+    const query = this.createSelectorQuery();
+    query.select('.custom-tab-bar').boundingClientRect((rect) => {
+      if (rect && rect.height) {
+        setCustomTabBarHeight(rect.height)
+      }
+    }).exec();
+  },
+  methods: {
+    ...mapActions(useChatStore, ["resetChatStore"]),
+    ...mapActions(useAuthStore, ['setShowLoginModal']),
+    onStartCreate() {
+      this.resetChatStore();
+      if(!mpx.getStorageSync('token')) {
+        this.setShowLoginModal(true)
+      } else {
+        wx.navigateTo({ url: "/pages/create/category" })
+      }
+    },
+    onchange(e) {
+      const { page, index } = e.currentTarget.dataset
+      const tabIndex = Number(index)
+
+      if (!Number.isNaN(tabIndex)) {
+        this.setData({ selected: tabIndex })
+      }
+
+      wx.switchTab({
+        url: "/" + page
+      })
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}
+</script>

@@ -1,0 +1,283 @@
+<template>
+  <layout bind:loginSuccess="handleRefreshList">
+    <view class="flex flex-col" style="height: {{contentMinHeight}}px;">
+      <bg />
+      <nav-bar title="我的订单" />
+      <view class="flex-1 overflow-auto">
+        <un-login wx:if="{{ !isLoggedIn }}" tip="您还没有登录，请登录后查看订单" />
+        <scroll-view
+          wx:else
+          class="h-full"
+          scroll-y
+          refresher-enabled
+          refresher-triggered="{{ refresherTriggered }}"
+          refresher-threshold="{{ 45 }}"
+          refresher-default-style="none"
+          bindrefresherrefresh="onRefresh"
+          bindrefresherpulling="onRefresherPulling"
+          bindrefresherrestore="onRefresherRestore"
+          bindscrolltolower="onReachBottom"
+          lower-threshold="100"
+        >
+          <!-- 自定义下拉刷新样式 -->
+          <view slot="refresher" class="flex flex-col items-center justify-center py-32rpx w-full">
+            <view wx:if="{{ refresherTriggered }}" class="flex items-center justify-center">
+              <view class="w-32rpx h-32rpx border-4rpx border-gray-400 border-t-white rounded-full animate-spin mr-16rpx" />
+              <text class="text-[#D1D5DB] text-28rpx"> 正在刷新... </text>
+            </view>
+            <view wx:elif="{{ refresherPulling }}" class="w-full text-center">
+              <text class="text-[#D1D5DB] text-28rpx"> {{ refresherText }}</text>
+            </view>
+          </view>
+
+          <!-- 初次加载骨架屏 -->
+          <order-skeleton wx:if="{{ showSkeleton }}" count="{{ 4 }}" />
+
+          <!-- 空状态 -->
+          <order-empty wx:elif="{{ isEmpty }}" />
+
+          <!-- 订单列表 -->
+          <view wx:else class="p-30rpx">
+            <view
+              class="pb-32rpx"
+              wx:for="{{ orderList }}"
+              wx:for-item="item"
+              wx:key="id"
+            >
+              <order-item
+                order="{{ item }}"
+                bind:refreshList="handleRefreshList"
+                bind:showPickupModal="onShowPickupModal"
+              />
+            </view>
+
+            <!-- 加载更多状态 -->
+            <view wx:if="{{ loadingMore }}" class="flex justify-center py-20rpx">
+              <view class="flex items-center">
+                <view class="w-24rpx h-24rpx border-4rpx border-gray-600 border-t-white rounded-full animate-spin mr-16rpx" />
+                <text class="text-gray-400 text-26rpx">加载中...</text>
+              </view>
+            </view>
+
+            <!-- 没有更多数据 -->
+            <view wx:elif="{{ noMoreData }}" class="flex justify-center py-20rpx">
+              <text class="text-gray-500 text-24rpx">没有更多数据了</text>
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+
+      <pickup-modal
+        isShowPickupModal="{{ isShowPickupModal }}"
+        order="{{ selectedOrder }}"
+        bind:close="onClosePickupModal"
+      />
+    </view>
+  </layout>
+</template>
+
+<script lang="ts">
+import { createPage } from "@mpxjs/core";
+import { mapState } from "@mpxjs/pinia";
+
+import { tabSwitcher } from "../../custom-tab-bar/tabbar";
+import { useAuthStore } from "@/store";
+import { getOrderList } from "@/api/order";
+import { Order } from "../../types/order";
+import { getScrollContentHeight } from "@/utils/page";
+
+interface OrderData {
+  orderList: Order[];
+  showEmpty: boolean;
+  isLoading: boolean;
+  refresherTriggered: boolean;
+  refresherPulling: boolean;
+  refresherText: string;
+  loadingMore: boolean;
+  hasMore: boolean;
+  currentPage: number;
+  pageSize: number;
+  total: number;
+  isShowPickupModal: boolean;
+  selectedOrder: Order | null;
+  contentMinHeight: number;
+}
+
+createPage({
+  data(): OrderData {
+    return {
+      orderList: [],
+      showEmpty: false,
+      isLoading: true,
+      refresherTriggered: false,
+      refresherPulling: false,
+      refresherText: "下拉刷新",
+      loadingMore: false,
+      hasMore: true,
+      currentPage: 1,
+      pageSize: 20,
+      total: 0,
+      isShowPickupModal: false,
+      selectedOrder: null,
+      contentMinHeight: 0,
+    };
+  },
+  computed: {
+    ...mapState(useAuthStore, ["isLoggedIn"]),
+    showSkeleton() {
+      return this.isLoading && this.orderList.length === 0;
+    },
+    isEmpty() {
+      return !this.isLoading && this.showEmpty;
+    },
+    noMoreData() {
+      return !this.hasMore && this.orderList.length > 0;
+    },
+  },
+  async onReady() {
+    const height = getScrollContentHeight();
+    this.setData({ contentMinHeight: height });
+  },
+  onShow() {
+    tabSwitcher(this);
+    if (!this.isLoggedIn) return;
+    this._getOrderList(true);
+  },
+  methods: {
+    async _getOrderList(isRefresh = false, showSuccessToast = false) {
+      try {
+        if (isRefresh) {
+          this.setData({
+            isLoading: true,
+            currentPage: 1,
+            hasMore: true,
+            showEmpty: false,
+          });
+        } else {
+          this.setData({ loadingMore: true });
+        }
+
+        const res = await getOrderList({
+          page: this.currentPage,
+          pageSize: this.pageSize,
+        });
+
+        const list = res.data?.list || [];
+        const total = res.data?.totalCount || 0;
+
+        if (res.code === 0) {
+          if (isRefresh) {
+            this.setData({ orderList: list });
+          } else {
+            this.setData({
+              orderList: [...this.orderList, ...list],
+            });
+          }
+
+          this.setData({
+            total: total,
+            hasMore: this.orderList.length < total,
+            showEmpty: this.orderList.length === 0,
+          });
+
+          if (list.length > 0) {
+            this.setData({ currentPage: this.currentPage + 1 });
+          }
+
+          // 只有在手动下拉刷新时才显示成功提示
+          if (showSuccessToast) {
+            setTimeout(() => {
+              wx.showToast({
+                title: "刷新成功",
+                icon: "none",
+                duration: 1500,
+              });
+            }, 200);
+          }
+        } else {
+          wx.showToast({ title: res.message || "获取订单失败", icon: "none" });
+          if (isRefresh && this.orderList.length === 0) {
+            this.setData({ showEmpty: true });
+          }
+        }
+      } catch (error) {
+        console.error("加载订单列表失败:", error);
+        wx.showToast({
+          title: "加载失败",
+          icon: "none",
+        });
+        if (isRefresh && this.orderList.length === 0) {
+          this.setData({ showEmpty: true });
+        }
+      } finally {
+        this.setData({
+          isLoading: false,
+          loadingMore: false,
+          refresherTriggered: false,
+        });
+      }
+    },
+
+    // 下拉刷新开始
+    onRefresh() {
+      this.setData({ refresherTriggered: true });
+      this._getOrderList(true, true);
+    },
+
+    // 下拉过程中
+    onRefresherPulling(e: any) {
+      const { dy } = e.detail;
+      this.setData({
+        refresherPulling: true,
+        refresherText: dy > 45 ? "释放刷新" : "下拉刷新",
+      });
+    },
+
+    // 下拉恢复
+    onRefresherRestore() {
+      this.setData({
+        refresherPulling: false,
+        refresherText: "下拉刷新",
+      });
+    },
+
+    // 触底加载更多
+    onReachBottom() {
+      if (!this.loadingMore && this.hasMore) {
+        this._getOrderList(false);
+      }
+    },
+
+    handleRefreshList() {
+      this._getOrderList(true);
+    },
+
+    // 显示取件码弹窗
+    onShowPickupModal(event: any) {
+      const { order } = event.detail;
+      this.setData({
+        isShowPickupModal: true,
+        selectedOrder: order,
+      });
+    },
+
+    // 关闭取件码弹窗
+    onClosePickupModal() {
+      this.isShowPickupModal = false;
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "order-item": "./components/order-item.mpx",
+    "order-skeleton": "./components/order-skeleton.mpx",
+    "order-empty": "./components/order-empty.mpx",
+    "van-button": "@vant/weapp/button/index",
+    "un-login": "@/components/un-login.mpx",
+    "pickup-modal": "./components/pickup-modal.mpx"
+  }
+}
+</script>

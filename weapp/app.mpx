@@ -1,0 +1,191 @@
+<script lang="ts">
+import mpx, { createApp } from '@mpxjs/core'
+import apiProxy from '@mpxjs/api-proxy'
+import { createPinia } from '@mpxjs/pinia'
+import { useAuthStore } from '@/store/auth'
+
+mpx.use(apiProxy, { usePromise: true })
+mpx.use(createPinia())
+createApp({
+  globalData: {
+    version: '1.0.0' // 默认版本号
+  },
+  onLaunch: function (options) {
+    // 获取小程序版本号, 只能在正式版中获取, 开发版和体验版中获取不到
+    try {
+      const accountInfo = wx.getAccountInfoSync();
+      this.globalData.version = accountInfo.miniProgram.version || '1.0.0';
+      // console.log('小程序版本号:', this.globalData.version);
+    } catch (error) {
+      console.warn('获取版本号失败:', error);
+    }
+  },
+  onShow: function () {
+    const authStore = useAuthStore();
+    const isExpired = authStore.checkAndLogoutIfExpired();
+    if (!isExpired) {
+      authStore.refreshTokenIfNeeded()
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+  {
+    "pages": [
+      "./pages/home/index",
+      "./pages/history/index",
+      "./pages/order/index",
+      "./pages/user/index",
+      "./pages/create/category",
+      "./pages/create/craft",
+      "./pages/create/prompt",
+      "./pages/create/preview",
+      "./pages/auth/index",
+    ],
+    "subPackages": [
+      {
+        "root": "subPackages",
+        "name": "subPackages",
+        "pages": [
+          {
+            "src": "../pages/history/detail.mpx",
+            "path": "history/detail"
+          },
+          {
+            "src": "../pages/order/detail.mpx",
+            "path": "order/detail"
+          },
+          {
+            "src": "../pages/order/after-service.mpx",
+            "path": "order/after-service"
+          },
+          {
+            "src": "../pages/user/profile/index.mpx",
+            "path": "user/profile/index"
+          },
+          {
+            "src": "../pages/user/profile/nickname.mpx",
+            "path": "user/profile/nickname"
+          },
+          {
+            "src": "../pages/user/coupon/index.mpx",
+            "path": "user/coupon/index"
+          },
+          {
+            "src": "../pages/user/coupon/redemption.mpx",
+            "path": "user/coupon/redemption"
+          },
+          {
+            "src": "../pages/user/about/index.mpx",
+            "path": "user/about/index"
+          },
+          {
+            "src": "../pages/chat/index.mpx",
+            "path": "chat/index"
+          },
+          {
+            "src": "../pages/home/template.mpx",
+            "path": "home/template"
+          },
+          {
+            "src": "../pages/home/campaign.mpx",
+            "path": "home/campaign"
+          },
+          {
+            "src": "../pages/nfc/link.mpx",
+            "path": "nfc/link"
+          },
+          {
+            "src": "../pages/nfc/custom.mpx",
+            "path": "nfc/custom"
+          },
+          {
+            "src": "../pages/nfc/agent/index.mpx",
+            "path": "nfc/agent/index"
+          },
+          {
+            "src": "../pages/nfc/agent/detail.mpx",
+            "path": "nfc/agent/detail"
+          },
+          {
+            "src": "../pages/produce/index.mpx",
+            "path": "produce/index"
+          },
+          {
+            "src": "../pages/produce/config.mpx",
+            "path": "produce/config"
+          },
+          {
+            "src": "../pages/produce/pay.mpx",
+            "path": "produce/pay"
+          },
+          {
+            "src": "../pages/agreement/user-agreement.mpx",
+            "path": "agreement/user-agreement"
+          },
+          {
+            "src": "../pages/agreement/privacy-agreement.mpx",
+            "path": "agreement/privacy-agreement"
+          },
+        ]
+      }
+    ],
+    "window": {
+      "navigationStyle": "custom",
+      "backgroundColor": "#0D0D0D",
+    },
+    "usingComponents": {
+      "bg": "./components/bg",
+      "primary-button": "./components/primary-button",
+      "nav-bar": "./components/nav-bar",
+      "user-guide": "./components/user-guide/index.mpx",
+      "layout": "./components/layout"
+    },
+    "plugins": {
+      "WechatSI": {
+        "version": "0.3.6",
+        "provider": "wx069ba97219f66d99"
+      }
+    },
+    "tabBar": {
+      "custom": true,
+      "list": [
+        {
+          "pagePath": "pages/home/index",
+          "text": "首页"
+        },
+        {
+          "pagePath": "pages/history/index",
+          "text": "资产"
+        },
+        // {
+        //   "pagePath": "pages/create/category",
+        //   "text": "新建"
+        // },
+        {
+          "pagePath": "pages/order/index",
+          "text": "订单"
+        },
+        {
+          "pagePath": "pages/user/index",
+          "text": "我的"
+        }
+      ]
+    },
+    "requiredPrivateInfos": [
+      "getLocation"
+    ],
+    "permission": {
+      "scope.userLocation": {
+        "desc": "你的位置信息将用于获取附近的设备列表"
+      }
+    }
+  }
+</script>
+
+<style lang="stylus">
+@import './styles/vant-cover.styl'
+@import './styles/chat.styl'
+@import './styles/global.styl'
+</style>

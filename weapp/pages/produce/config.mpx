@@ -1,0 +1,227 @@
+<template>
+  <view class="h-screen flex flex-col bg-#0D0D0D text-white pb-[env(safe-area-inset-bottom)]">
+    <!-- 顶部导航栏 -->
+    <nav-bar isBack="{{ true }}" title="下单生产" />
+
+    <view class="flex-1 overflow-auto">
+      <!-- 产品展示区域 -->
+      <view class="flex justify-center items-center w-full h-32vh max-h-600rpx mb-32rpx bg-[#363636]">
+        <!-- 实际图片 -->
+        <image wx:if="{{ productImageUrl }}" src="{{ productImageUrl }}" class="w-full h-full" mode="aspectFit"
+          bindload="onImageLoad" binderror="onImageError" />
+      </view>
+
+      <!-- 价格和数量 -->
+      <view class="flex justify-between px-32rpx mb-32rpx">
+        <view class="">
+          <text class="text-yellow-400 text-40rpx font-bold mr-8rpx">¥</text>
+          <text class="text-yellow-400 text-80rpx font-bold mr-16rpx">{{ totalPrice }}</text>
+          <!-- 下面价格中间有穿过线 -->
+          <text wx:if="{{ discountedPrice }}" class="text-gray-400 text-28rpx line-through">¥{{ price }}</text>
+        </view>
+        <view class="flex h-120rpx items-center">
+          <view class="text-white text-32rpx mr-16rpx">数量</view>
+          <view class="flex items-center">
+            <view class="w-56rpx h-56rpx p-8rpx flex items-center justify-center bg-[#333] rounded-8rpx"
+              bindtap="decreaseQuantity">
+              <van-icon name="minus" size="12px" color="{{ quantity <= 1 ? '#666' : '#ffffff' }}" />
+            </view>
+            <view class="w-56rpx h-56rpx p-6rpx mx-4rpx flex items-center justify-center bg-[#333] rounded-8rpx">
+              <text class="text-white font-medium text-32rpx">{{ quantity }}</text>
+            </view>
+            <view class="w-56rpx h-56rpx p-8rpx flex items-center justify-center bg-[#333] rounded-8rpx"
+              bindtap="increaseQuantity">
+              <van-icon name="plus" size="12px" color="{{ quantity >= 1 ? '#666' : '#ffffff' }}" />
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 配置选项 -->
+      <view class="px-32rpx">
+        <!-- 加工时间 -->
+        <view class="mb-32rpx">
+          <view class="flex items-center mb-22rpx">
+            <text class="text-white text-28rpx mr-16rpx">加工时间</text>
+            <van-icon name="clock-o" size="14px" color="#ccc" />
+          </view>
+
+          <view class="flex">
+            <view wx:if="{{ currentProcessOptions.length > 0 }}" class="flex w-full">
+              <view wx:for="{{ currentProcessOptions }}" wx:key="processType" wx:for-item="option"
+                class="w-[48%] py-16rpx px-30rpx rounded-32rpx border border-solid"
+                style="border-color: {{ processOption && processOption.processType === option.processType ? '#fff' : '#2f2f2f' }}; {{ index > 0 ? 'margin-left: 16rpx;' : '' }}"
+                bindtap="onProcessOptionClick" data-option="{{ option }}">
+                <view
+                  style="color: {{ processOption && processOption.processType === option.processType ? '#fff' : '#929292' }};">
+                  <view class="font-medium text-28rpx mb-24rpx">{{ option.processType }}</view>
+                  <view class="text-24rpx">预计时间：{{ option.duration }}</view>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- NFC功能 -->
+      <view class="px-10rpx mb-50rpx">
+        <nfc />
+      </view>
+    </view>
+
+    <!-- 底部下单按钮 -->
+    <view class="px-30rpx py-16rpx bg-#0D0D0D z-10">
+      <van-button type="primary" custom-class="w-full" bindtap="goPayPage">
+        下单生产
+      </van-button>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { useChatStore, useProduceStore } from "@/store";
+import { createPage } from "@mpxjs/core";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { ProcessOption } from "@/types";
+
+// 预览图片路径
+const previewImages = {
+  circle: "/assets/produce/preview-circle.png",
+  square: "/assets/produce/preview-square.png",
+  rectangle: "/assets/produce/preview-rectangle.png",
+};
+
+createPage({
+  data: {
+    showNFCSheet: false,
+    imageLoading: true,
+  },
+
+  computed: {
+    ...mapState(useProduceStore, [
+      "productImageUrl",
+      "price",
+      "discountedPrice",
+      "processType",
+      "processOption",
+      "quantity",
+      "nfcContent",
+      "assetId",
+    ]),
+    ...mapState(useChatStore, ["chatTemplate"]),
+    currentProcessOptions() {
+      const options = this.chatTemplate?.processOptions.slice(0, 2) || [];
+      // 默认选择第一个
+      this.setProcessOption(options[0]);
+      this.setPrice(options[0].price);
+      this.setDiscountedPrice(options[0]?.discountedPrice);
+      return options;
+    },
+
+    totalPrice() {
+      const currentPrice = this.discountedPrice || this.price || 0.01;
+      return parseFloat((currentPrice * this.quantity).toFixed(2));
+    },
+
+    productPreviewImage() {
+      return previewImages.circle;
+    },
+  },
+
+  onReady() {
+    // 设置默认选项
+    if (this.currentProcessOptions.length > 0) {
+      this.setProcessOption(this.currentProcessOptions[0]);
+    } else {
+      wx.showToast({
+        title: "未找到加工选项, 请重新选择",
+        icon: "none",
+      });
+    }
+  },
+
+  methods: {
+    ...mapActions(useProduceStore, [
+      "setPrice",
+      "setDiscountedPrice",
+      "setQuantity",
+      "setProcessOption",
+    ]),
+    onImageLoad() {
+      this.imageLoading = false;
+    },
+
+    onImageError() {
+      this.imageLoading = false;
+    },
+
+    onProcessOptionClick(e: any) {
+      const option: ProcessOption = e.currentTarget.dataset.option;
+      this.setProcessOption(option);
+      this.setPrice(option.price);
+      this.setDiscountedPrice(option?.discountedPrice);
+    },
+
+    handleAddNFC() {
+      this.showNFCSheet = true;
+    },
+
+    onNFCSheetClose() {
+      this.showNFCSheet = false;
+    },
+
+    selectNFCType(e: any) {
+      const type = e.currentTarget.dataset.type;
+      this.showNFCSheet = false;
+      wx.navigateTo({
+        url: `/subPackages/produce/nfc/${type}/index`,
+      });
+    },
+
+    decreaseQuantity() {
+      if (this.quantity > 1) {
+        this.setQuantity(this.quantity - 1);
+      }
+    },
+
+    increaseQuantity() {
+      if (this.quantity >= 1) {
+        wx.showToast({
+          title: "已达到最大数量",
+          icon: "none",
+          duration: 2000
+        });
+        return;
+      }
+      this.setQuantity(this.quantity + 1);
+    },
+
+    goPayPage() {
+      if (!this.processOption) {
+        wx.showToast({
+          title: "未找到加工选项, 请重新选择",
+          icon: "none",
+        });
+
+        return;
+      }
+
+      wx.navigateTo({
+        url: "/subPackages/produce/pay",
+      });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-popup": "@vant/weapp/popup/index",
+    "van-icon": "@vant/weapp/icon/index",
+    "nfc": "@/components/nfc/index.mpx",
+    "van-action-sheet": "@vant/weapp/action-sheet/index"
+  }
+}
+</script>

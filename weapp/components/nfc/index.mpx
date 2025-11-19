@@ -1,0 +1,229 @@
+<template>
+  <view class="p-24rpx">
+    <view class="flex justify-between items-center gap-32rpx mb-16rpx">
+      <view class="flex items-center gap-20rpx">
+        <text class="text-#cccccc text-32rpx">NFC</text>
+        <image src="../../assets/produce/nfc.png" class="w-[32rpx] h-[32rpx]" />
+      </view>
+      <view wx:if="{{ nfcContent && edit }}">
+        <text class="text-white text-28rpx mr-32rpx" bind:tap="onAddNfc">修改</text>
+        <text class="text-#E63232 text-28rpx" bind:tap="handleShowDeletePopup">删除</text>
+      </view>
+    </view>
+    <view>
+      <view wx:if="{{ nfcContent }}">
+        <view
+          wx:if="{{ nfcContent.type === 'link' }}"
+          class="bg-#232323 rounded-24rpx px-30rpx py-24rpx flex justify-between items-center gap-32rpx"
+        >
+          <view class="text-white text-28rpx truncate">{{ nfcContent.link }}</view>
+          <image src="../../assets/svgs/icon-nfc-link.svg" class="w-48rpx h-48rpx shrink-0" />
+        </view>
+
+        <view
+          wx:elif="{{ nfcContent.type === 'custom' }}"
+          class="bg-#232323 rounded-24rpx px-30rpx py-24rpx flex justify-between items-start gap-32rpx"
+        >
+          <view wx:if="{{ nfcContent.text }}" class="text-white text-28rpx line-clamp-2 flex-1 shrink-0 leading-40rpx" >{{ nfcContent.text }}</view>
+          <view wx:else class="text-white/55 text-28rpx line-clamp-2 flex-1 shrink-0 h-80rpx" >{{ defaultNfcTitle }}</view>
+          <image
+            wx:if="{{ mediaType === 'image' }}"
+            mode="aspectFill"
+            src="{{ nfcContent.attachments[0].url }}"
+            class="w-120rpx h-120rpx rounded-32rpx"
+          />
+          <image
+            wx:elif="{{ mediaType === 'video' }}"
+            mode="aspectFill"
+            src="../../assets/video.png"
+            class="w-120rpx h-120rpx rounded-32rpx"
+          />
+          <image
+            wx:elif="{{ mediaType === 'audio' }}"
+            mode="aspectFill"
+            src="../../assets/audio.png"
+            class="w-120rpx h-120rpx rounded-32rpx"
+          />
+        </view>
+
+        <view
+          wx:elif="{{ nfcContent.type === 'agent' }}"
+          class="bg-#232323 rounded-24rpx px-30rpx py-24rpx flex justify-between items-start gap-32rpx"
+        >
+          <view class="flex-1 shrink-0">
+            <view class="text-white text-32rpx font-medium truncate pb-8rpx">{{ nfcContent.agent?.name }}</view>
+            <view class="text-white text-28rpx line-clamp-2 leading-40rpx">{{ nfcContent.agent?.description }}</view>
+          </view>
+          <image
+            wx:if="{{ nfcContent.agent?.coverUrl && !nfcContent.agent.coverUrlError }}"
+            src="{{ nfcContent.agent?.coverUrl }}"
+            mode="aspectFill"
+            class="w-120rpx h-120rpx rounded-32rpx shrink-0"
+          />
+          <view
+            wx:elif="{{ !nfcContent.agent?.coverUrl || nfcContent.agent.coverUrlError }}"
+            class="bg-white/5 w-120rpx h-120rpx rounded-32rpx shrink-0 flex justify-center items-center"
+          >
+            <image
+              src="/src/assets/svgs/icon-nfc-agent.svg"
+              mode="aspectFit"
+              class="w-3/5 h-3/5 opacity-80"
+            />
+          </view>
+        </view>
+      </view>
+      <van-button
+        wx:else
+        bind:click="onAddNfc"
+        plain
+        type="primary"
+        custom-class="!bg-black/20 !text-white !border-white !h-128rpx !rounded-32rpx !px-30rpx"
+      >
+        <view class="flex items-center">
+          <text class="text-28rpx font-medium mr-100rpx">新增NFC</text>
+          <van-icon name="add-o" color="#ffffff" size="48rpx" />
+        </view>
+      </van-button>
+    </view>
+  </view>
+
+  <van-action-sheet
+    show="{{ showActionSheet }}"
+    actions="{{ actions }}"
+    bind:close="onClose"
+    bind:select="onSelect"
+    cancel-text="取消"
+    bind:cancel="onClose"
+  />
+
+  <!-- 删除确认弹窗 -->
+  <van-popup
+    show="{{ showDeletePopup }}"
+    position="center"
+    custom-class="rounded-32rpx !bg-#363636"
+    bind:close="onDeletePopupClose"
+    z-index="99999"
+  >
+    <view class="w-[calc(100vw-64rpx)] rounded-32rpx p-48rpx bg-#363636">
+      <view class="text-36rpx font-semibold mb-20rpx text-white">删除"NFC"内容？</view>
+      <view class="text-28rpx mb-48rpx text-white">删除后将从该产品中移除，你可在下单前随时重新添加。</view>
+      <view class="flex justify-end">
+        <van-button
+          custom-class="!bg-#232323 !border-#232323 !text-32rpx !text-white font-semibold rounded-32rpx !w-200rpx !h-110rpx mr-16rpx"
+          bindtap="cancelDelete"
+        >
+          取消
+        </van-button>
+        <van-button
+          custom-class="!bg-#FF4040 !border-#FF4040 !text-32rpx !text-white font-semibold rounded-32rpx !w-200rpx !h-110rpx"
+          bindtap="confirmDelete"
+        >
+          删除
+        </van-button>
+      </view>
+    </view>
+  </van-popup>
+</template>
+
+<script lang="ts">
+import { useProduceStore } from "@/store";
+import { createComponent } from "@mpxjs/core";
+import { mapState, mapActions } from "@mpxjs/pinia";
+
+createComponent({
+  properties: {
+    edit: {
+      type: Boolean,
+      value: true,
+    },
+  },
+  data: {
+    showActionSheet: false,
+    showDeletePopup: false,
+    actions: [
+      {
+        name: "链接跳转",
+        type: "link",
+        subname: "将NFC指向您指定的任意网址、社交媒体主页",
+      },
+      {
+        name: "创意展示页",
+        type: "custom",
+        subname: "轻松上传图文、视频等内容，即可生成一个专属页面供NFC读取",
+      },
+      {
+        name: "专属聊天助理",
+        type: "agent",
+        subname: "将NFC指向特定AI聊天助理",
+      },
+    ],
+  },
+  computed: {
+    ...mapState(useProduceStore, ["nfcContent"]),
+    mediaType() {
+      if (
+        this.nfcContent &&
+        this.nfcContent.type === "custom" &&
+        this.nfcContent.attachments.length > 0
+      ) {
+        return this.nfcContent.attachments[0].contentType.split("/")[0];
+      }
+      return "";
+    },
+    defaultNfcTitle() {
+      return `WOWNOW (${new Date().toISOString().split('T')[0]})`
+    },
+  },
+  methods: {
+    ...mapActions(useProduceStore, ["clearNfc", "saveToStorage"]),
+    onAddNfc() {
+      this.setData({ showActionSheet: true });
+    },
+    onClose() {
+      this.setData({ showActionSheet: false });
+    },
+    onSelect(e: any) {
+      const { type } = e.detail;
+      if (type === "link") {
+        wx.navigateTo({
+          url: "/subPackages/nfc/link",
+        });
+      } else if (type === "custom") {
+        wx.navigateTo({
+          url: "/subPackages/nfc/custom",
+        });
+      } else if (type === "agent") {
+        wx.navigateTo({
+          url: "/subPackages/nfc/agent/index",
+        });
+      }
+    },
+    handleShowDeletePopup() {
+      this.showDeletePopup = true;
+    },
+    onDeletePopupClose() {
+      this.showDeletePopup = false;
+    },
+    cancelDelete() {
+      this.showDeletePopup = false;
+    },
+    confirmDelete() {
+      this.clearNfc();
+      this.saveToStorage();
+      this.showDeletePopup = false;
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-icon": "@vant/weapp/icon/index",
+    "van-action-sheet": "@vant/weapp/action-sheet/index",
+    "van-button": "@vant/weapp/button/index",
+    "van-popup": "@vant/weapp/popup/index"
+  }
+}
+</script>

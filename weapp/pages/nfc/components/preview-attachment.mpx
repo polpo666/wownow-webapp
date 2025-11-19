@@ -1,0 +1,127 @@
+<template>
+  <view class="w-full">
+    <!-- Swiper Container -->
+    <swiper class="h-66vw" 
+      current="{{ currentIndex }}" 
+      bind:change="onSwiperChange" 
+      display-multiple-items="{{ 1 }}"
+      indicator-dots="{{ false }}" 
+      previous-margin="100rpx" 
+      next-margin="100rpx"
+    >
+      <!-- Attachment Images -->
+      <swiper-item wx:if="{{ attachments.length > 0 }}" wx:for="{{ attachments }}" wx:key="name"
+        class="flex justify-center items-center px-16rpx py-20rpx">
+        <view class="relative w-full h-full flex justify-center items-center">
+          <image src="{{ item.url }}" mode="aspectFill" class="w-full h-full rounded-[64rpx]" bind:tap="openViewer"
+            data-url="{{ item.url }}" />
+          <!-- Delete button -->
+          <view class="absolute -top-20rpx -right-20rpx" bind:tap="handleDelete" data-url="{{ item.url }}">
+            <image src="../../../assets/svgs/icon-nfc-cancel.svg" class="w-76rpx h-76rpx" />
+          </view>
+        </view>
+      </swiper-item>
+      <!-- uploading status -->
+      <swiper-item 
+        wx:if="{{ uploadQueue.length > 0 }}" 
+        wx:for="{{ uploadQueue }}" 
+        wx:key="index" 
+        class="flex justify-center items-center px-16rpx py-20rpx"
+      >
+        <view class="bg-#3B2BC4 w-full h-full rounded-[64rpx] flex flex-col justify-center items-center gap-2">
+          <van-loading type="spinner" />
+          <text class="text-white">上传中...</text>
+        </view>
+      </swiper-item>
+      <!-- Upload button -->
+      <swiper-item wx:if="{{ showUploadButton }}" class="px-16rpx py-20rpx">
+        <view class="w-full h-full">
+          <nfc-upload-button bind:upload="onSelect" showDecoration="{{ false }}" />
+        </view>
+      </swiper-item>
+    </swiper>
+    <!-- Custom indicator for multiple images -->
+    <view wx:if="{{ showIndicator }}" class="text-center text-32rpx font-semibold pt-12rpx text-white">
+      {{ displayIndex + 1 }} / 5
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from "@mpxjs/core";
+import type { Attachment } from "@/types";
+
+createComponent({
+  properties: {
+    attachments: {
+      type: Array,
+      value: [] as Attachment[],
+    },
+    uploadQueue: {
+      type: Array,
+      value: [] as Array<string>,
+    },
+  },
+  data: {
+    currentIndex: 0,
+  },
+  computed: {
+    displayIndex(): number {
+      const total = this.attachments.length + this.uploadQueue.length;
+      return this.currentIndex >= total ? total - 1 : this.currentIndex;
+    },
+    showUploadButton(): boolean {
+      if (this.attachments.length > 0) {
+        return (this.attachments.length + this.uploadQueue.length) < 5;
+      } else {
+        return this.uploadQueue.length > 1 && this.uploadQueue.length < 5;
+      }
+    },
+    showIndicator(): boolean {
+      if (this.attachments.length <= 0) {
+        return this.uploadQueue.length > 1;
+      } else {
+        return true;
+      }
+    }
+  },
+  methods: {
+    openViewer(e: any) {
+      if (!this.attachments || this.attachments.length === 0) return;
+
+      const { url } = e.currentTarget.dataset;
+      wx.previewImage({
+        current: url,
+        urls: this.attachments.map(item => item.url),
+      });
+    },
+
+    handleDelete(e: WechatMiniprogram.BaseEvent) {
+      const url = e.currentTarget.dataset.url;
+      this.triggerEvent("delete", { url });
+    },
+
+    onSelect() {
+      if (this.uploadQueue.length > 0) {
+        wx.showToast({ title: '请等待图片上传完成', icon: 'none' });
+        return;
+      }
+      this.triggerEvent("select");
+    },
+
+    onSwiperChange(e: WechatMiniprogram.SwiperChange) {
+      this.setData({ currentIndex: e.detail.current });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "nfc-upload-button": "./nfc-upload-button",
+    "van-loading": "@vant/weapp/loading/index"
+  }
+}
+</script>

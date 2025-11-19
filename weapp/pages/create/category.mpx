@@ -1,0 +1,173 @@
+<template>
+  <layout bind:loginSuccess="handleRefreshList">
+
+    <view class="flex flex-col h-screen pb-[env(safe-area-inset-bottom)]">
+      <bg />
+      <nav-bar title="选择分类" isBack="{{ true }}" defaultBackBehavior="{{ false }}" bind:back="onBack" />
+      <!-- <category-list class="flex-1 overflow-auto" bind:back="onBack" /> -->
+      <view class="flex flex-col flex-1 overflow-y-auto">
+        <view class="flex-1 overflow-y-auto p-32rpx">
+          <view wx:if="{{ categorys.length === 0 }}" class="flex justify-center items-center h-40">
+            <text class="text-gray-500">暂无数据</text>
+          </view>
+          <view wx:else class="grid grid-cols-2 gap-2 ">
+            <view wx:for="{{ categorys }}" wx:key="id" item="{{ item }}" bindtap="selectCategory" class="rounded-lg"
+              style="border: 1px solid {{ item.isSelected ? '#FADA39' : 'transparent' }}; background: radial-gradient(50% 49.76% at 50% 50.23923444976076%, hsl(0, 0%, 31%) 0%, hsl(0, 0%, 13%) 100%)"
+              data-item="{{ item }}">
+              <view class="h-32 p-8rpx flex justify-center items-center">
+                <image wx:if="{{ item.category.coverUrl }}"
+                  src="{{ item.category.coverUrl + '?x-oss-process=image/resize,p_50' }}" mode="aspectFit"
+                  class="w-full h-full object-contain" />
+                <image wx:else src="{{ placeholderImg }}" mode="aspectFit" class="size-9 object-contain" />
+              </view>
+              <view class="text-white  py-[10px] px-[15px] flex justify-center items-center gap-2">
+                <text class="text-[26rpx] font-medium">{{ item.category.name }}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+        <van-button id="start-chat" disabled="{{ disabled }}" type="primary" class="px-3" block bind:click="onNext"
+          custom-class="my-16rpx"
+          custom-style="border: none; {{ disabled ? 'background-color: #ccc !important; color: #A6A6A6' : '' }}">下一步</van-button>
+      </view>
+      <user-guide wx:if="{{ isLoggedIn }}" options="{{ guideData }}" bind:stepChange="onGuideStepChange"
+        bind:end="onGuideEnd" />
+    </view>
+  </layout>
+</template>
+
+<script>
+import { tabSwitcher } from "@/custom-tab-bar/tabbar";
+import { createPage } from "@mpxjs/core";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { useAuthStore, useChatStore } from "@/store";
+import { getCategoryWithTemplates } from "@/api/template";
+
+createPage({
+  data: {
+    categorys: [],
+    guideData: [
+      {
+        selector: '#start-chat',
+        tips: '想做一枚纪念币，还是一张特别的卡片？先选定方向，我们再帮你细化工艺',
+        ref: "categoryListRef",
+      },
+    ],
+  },
+  computed: {
+    ...mapState(useAuthStore, ['isLoggedIn']),
+    disabled: function () {
+      return !this.categorys.some(item => item.isSelected)
+    }
+  },
+  onShow() {
+    tabSwitcher(this)
+
+    getApp().globalData.categoryListRef = this
+    this.fetchCategory()
+  },
+  onLoad() {
+    if (this.$refs?.loginModal) {
+      this.$refs.loginModal.show()
+    }
+  },
+  methods: {
+    ...mapActions(useChatStore, ['setCategory']),
+    fetchCategory() {
+      getCategoryWithTemplates({}).then(res => {
+        const { code, data } = res
+        if (code === 0 && data) {
+          const { list } = data
+          const categorys = list.map(item => ({ ...item, isSelected: false }))
+          this.setData({
+            categorys,
+          })
+        }
+      })
+    },
+    selectCategory(e) {
+      const item = e.currentTarget.dataset.item
+      this.setData({
+        categorys: this.data.categorys.map(categoryItem => {
+          return { ...categoryItem, isSelected: item.category.id === categoryItem.category.id }
+        })
+      })
+    },
+    onNext() {
+      this.setCategory(this.data.categorys.find(item => item.isSelected))
+      wx.redirectTo({
+        url: '/pages/create/craft'
+      })
+    },
+    onBack() {
+      wx.navigateBack({
+        fail: () => {
+          wx.switchTab({
+            url: '/pages/home/index'
+          })
+        }
+      })
+    }
+  }
+});
+</script>
+
+<style lang="stylus">
+.van-tabs--line
+  height auto !important
+
+.van-tabs__content
+  flex 1
+
+.container
+  padding 40rpx
+
+  .header
+    text-align center
+    margin-bottom 60rpx
+
+    .title
+      display block
+      font-size 48rpx
+      font-weight bold
+      color #ffffff
+      margin-bottom 20rpx
+
+    .subtitle
+      display block
+      font-size 28rpx
+      color #e0e0e0
+
+  .content
+    display flex
+    flex-direction column
+    align-items center
+
+    .login-btn
+      width 400rpx
+      height 88rpx
+      font-size 32rpx
+
+    .user-info
+      display flex
+      flex-direction column
+      align-items center
+
+      .welcome-text
+        font-size 32rpx
+        color #ffffff
+        margin-bottom 40rpx
+
+      .logout-btn
+        width 300rpx
+        height 80rpx
+        font-size 28rpx
+</style>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index"
+  }
+}
+</script>

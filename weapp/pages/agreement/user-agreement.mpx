@@ -1,0 +1,157 @@
+<template>
+  <view class="agreement-container">
+    <bg />
+    <nav-bar title="用户协议" isBack="{{ true }}" />
+
+    <scroll-view scroll-y class="agreement-content">
+      <text class="agreement-text" user-select="{{ true }}">{{ userAgreement }}</text>
+
+      <view class="table-section">
+        <text class="table-title">表格1: AI生成内容著作权认定标准与创作指导</text>
+        <image src="./user-agree.png" style="width: 100%;" mode="widthFix" />
+      </view>
+    </scroll-view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+
+createPage({
+  data: {
+    userAgreement: `广州轻变量信息科技有限公司
+版本生效日期：2025年9月9日
+导言
+欢迎您使用广州轻变量信息科技有限公司（以下简称"本平台"）提供的相关服务。在您开始使用本服务前，请务必仔细阅读并充分理解本协议的全部内容。当您点击同意或以任何方式使用本服务，即表示您已充分理解并同意接受本协议的全部条款。
+
+一、协议范围
+
+1.1 本协议内容包括本协议正文及所有本平台已发布或将来可能发布的各项规则、公告、指引等，所有规则为本协议不可分割的一部分，与本协议正文具有同等法律效力。
+
+1.2 本平台有权根据业务发展、法律法规变化等因素，制定、修改本协议及／或各项规则。修订后的协议和规则将及时公布在本平台上，一经公布即生效。若您在本协议及／或规则修订后继续使用本服务，即表示您已接受修订后的协议和规则。
+
+二、账户管理与安全
+
+2.1 账户注册与使用：您承诺在注册账户时提供真实、准确、完整的信息资料。账户所有权归本平台所有，您仅获得该账户的使用权。该使用权仅属于初始注册申请人。
+
+2.2 账号安全责任：您有义务妥善保管您的账户和密码，并对以您的账户进行的任何活动和事件负全部法律责任。如发现您的账户遭到未经授权的使用或存在任何安全问题，您应立即通知本平台。对于因黑客行为、您的保管疏忽或第三方未经授权使用您的账户而造成的任何损失，本平台不承担任何责任。
+
+三、用户行为规范
+
+3.1 您在使用本服务时，必须遵守诚实信用原则，不得利用本服务从事任何违反中国法律法规、社会公德或侵犯他人合法权益的行为，包括但不限于：
+
+    • 发布、传播任何含有淫秽、色情、暴力、恐怖、赌博等违法或有害信息的内容；
+    • 侵犯他人的肖像权、名誉权、隐私权和个人信息权益；
+    • 未经许可，侵害他人的专利、商标、商业秘密、版权或其他知识产权；
+    • 利用AI功能生成或传播虚假新闻、谣言或其他非法信息；
+    • 扰乱正常的网络交易或服务秩序；
+    • 使用网络爬虫或其他自动化程序或设备，从本平台获取或发布商业广告；
+    • 以任何方式非法侵入、控制本平台的系统或获取系统数据。
+
+3.2 您理解并同意，本平台有权对您利用本服务生成的内容进行审核。若本平台发现您利用服务从事上述禁止行为，有权不经事先通知，立即采取删除相关内容、限制功能、暂停或终止服务、永久封禁账户等措施。本平台还将保留相关记录，并向有关主管部门报告。
+
+四、知识产权与AI生成内容
+
+4.1 AI生成内容的著作权归属：您通过本平台AI工具生成的内容（包括但不限于图片、文字、设计方案等），其著作权归属于您。前提是您在创作过程中投入了具有独创性的智力劳动，且该内容不违反本协议的任何规定。简单的、一次性的指令输入可能不具备独创性，从而无法获得著作权法保护。
+
+4.2 著作权合规义务：您承诺在利用AI工具生成内容时，您的输入指令、提示词以及最终生成的内容均不会侵犯他人的知识产权。您理解，AI模型可能在训练阶段或生成过程中接触到受版权保护的作品，您有义务避免生成与他人作品构成实质性相似的内容。若因您使用本服务侵犯他人合法权益而引发任何争议或诉讼，您应承担全部责任。
+
+4.3 平台责任与免责：本平台作为技术服务提供者，对用户生成内容的合法性不承担事前审查义务。但当本平台收到合格的侵权通知后，将依据法律法规和本协议规定，及时采取删除、屏蔽、断开链接等必要措施。
+
+五、服务中断与终止
+
+5.1 本平台有权根据经营需要或法律法规要求，在任何时间暂时或永久地变更、中断或终止部分或全部服务，且无需对您承担责任。
+
+5.2 若您违反本协议，本平台有权单方终止为您提供服务。
+
+六、免责与责任限制
+
+6.1 您理解并同意，本平台不对因不可抗力、黑客攻击、计算机病毒侵入、网络拥堵、通讯故障、电力故障、第三方服务瑕疵等非本平台原因造成的信息泄露、服务中断或任何其他损失承担责任。
+
+6.2 本平台不保证其提供的服务、信息或内容没有病毒或其他有害成分。本平台不对任何因使用本服务而导致的直接或间接损失负责。
+
+七、法律适用与争议解决
+
+7.1 本协议的订立、执行、解释及争议的解决均适用中华人民共和国法律。
+
+7.2 因本协议引起的或与本协议有关的任何争议，首先应友好协商解决。协商不成的，任何一方有权向本平台所在地有管辖权的人民法院提起诉讼。`
+  }
+})
+</script>
+
+<script type="application/json">
+  {
+    "usingComponents": {
+      "bg": "../../components/bg",
+      "nav-bar": "../../components/nav-bar"
+    }
+  }
+</script>
+
+<style lang="stylus">
+.agreement-container
+  min-height: 100vh
+  background: transparent
+
+.agreement-content
+  padding: 10px
+  height: calc(100vh - 88px)
+
+.agreement-text
+  font-size: 14px
+  line-height: 1.8
+  color: #fff
+  white-space: pre-line
+  text-align: justify
+
+.table-section
+  margin: 20px 0
+
+.table-title
+  display: block
+  font-size: 14px
+  font-weight: bold
+  color: #fff
+  margin-bottom: 12px
+
+.table-scroll
+  width: 100%
+
+.agreement-table
+  width: 100%
+  border-collapse: collapse
+  font-size: 12px
+  line-height: 1.4
+  background: transparent
+  border: 1px solid rgba(255, 255, 255, 0.3)
+  margin: 0
+  table-layout: fixed
+
+.agreement-table th
+  background: transparent
+  border: 1px solid rgba(255, 255, 255, 0.3)
+  padding: 8px 6px
+  text-align: center
+  font-weight: bold
+  color: #fff
+
+.agreement-table td
+  border: 1px solid rgba(255, 255, 255, 0.3)
+  padding: 8px 6px
+  vertical-align: top
+  color: #fff
+  word-wrap: break-word
+  word-break: break-word
+
+.col-1
+  width: 20%
+
+.col-2
+  width: 30%
+
+.col-3
+  width: 30%
+
+.col-4
+  width: 20%
+</style>

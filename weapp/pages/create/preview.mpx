@@ -1,0 +1,136 @@
+<template>
+  <view class="flex flex-col h-screen w-screen">
+    <bg />
+    <nav-bar isBack="true" title="" defaultBackBehavior="{{ false }}" bind:back="onBack" />
+    <view class="flex gap-16rpx p-16rpx w-full flex-nowrap overflow-x-auto overflow-y-hidden">
+      <view
+        wx:for="{{ outputImages }}"
+        wx:key="index"
+        class="flex justify-center items-center w-28vw h-28vw min-w-160rpx min-h-160rpx relative rounded-32rpx flex-shrink-0 overflow-hidden"
+        bind:tap="handleImageClick(item)"
+      >
+        <image
+          src="/src/assets/svgs/icon-checked-fill.svg"
+          wx:if="{{ item.imageUrl === currentImageUrl }}"
+          mode="aspectFit"
+          class="w-[22.86%] h-[22.86%] absolute top-16rpx right-16rpx"
+        />
+        <image src="{{ item.imageUrl }}" mode="aspectFill" class="w-full h-full" />
+      </view>
+    </view>
+    <view class="flex-1 overflow-hidden flex justify-center items-center pt-16rpx relative">
+      <movable-area class="w-full h-full">
+        <movable-view
+          class="movable-image"
+          direction="all"
+          scale="{{ true }}"
+          scale-min="{{ 0.5 }}"
+          scale-max="{{ 3 }}"
+          scale-value="{{ scaleValue }}"
+          bind:scale="onScale"
+          bind:tap="onImageTap"
+          bind:change="onMove"
+        >
+          <image src="{{ currentImageUrl }}" mode="aspectFit" class="w-full h-full" />
+        </movable-view>
+      </movable-area>
+      <text class="absolute bottom-16rpx right-16rpx text-white text-24rpx bg-black bg-opacity-50 px-16rpx py-8rpx rounded-8rpx">图片由AI生成</text>
+    </view>
+    <view class="flex gap-2 p-32rpx">
+      <view class="w-[200rpx]">
+        <van-button block custom-class="!bg-[#232323] !border-[#232323] !text-white" bind:click="onBack">返回</van-button>
+      </view>
+      <view class="flex-1">
+        <van-button type="primary" block bind:click="handleProduction">绑定终端生产</van-button>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script>
+import { createPage } from "@mpxjs/core";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { useProduceStore, useChatStore } from "@/store";
+
+createPage({
+  data: {
+    currentImageUrl: "",
+    scaleValue: 1,
+    lastTapTime: 0,
+  },
+  computed: {
+    ...mapState(useChatStore, ["outputList"]),
+    outputImages() {
+      return this.outputList.filter((item) => item.role === "assistant" && item.imageUrl);
+    }
+  },
+  onLoad(options) {
+    const src = decodeURIComponent(options.src);
+    this.setData({
+      currentImageUrl: src || this.outputImages[0]?.imageUrl || "",
+    })
+  },
+  methods: {
+    ...mapActions(useProduceStore, ["setAssetId", "setProductImageUrl"]),
+    onBack() {
+      wx.navigateBack();
+    },
+    handleImageClick(item) {
+      this.setData({
+        currentImageUrl: item.imageUrl,
+      });
+    },
+    handleProduction() {
+      this.setAssetId(null);
+      this.setProductImageUrl(this.data.currentImageUrl);
+      wx.navigateTo({
+        url: "/subPackages/produce/index",
+      });
+    },
+    onScale(e) {
+      // 仅同步内部状态，避免频繁 setData 导致缩放回弹
+      this.data.scaleValue = e.detail.scale;
+    },
+    onImageTap(e) {
+      const currentTime = Date.now();
+      const timeDiff = currentTime - this.data.lastTapTime;
+
+      if (timeDiff < 300) {
+        // 双击重置缩放
+        this.setData({
+          scaleValue: 1,
+        });
+        this.data.scaleValue = 1;
+      }
+
+      this.setData({
+        lastTapTime: currentTime,
+      });
+    },
+    onMove(e) {
+      // 可以在这里处理移动事件
+      console.log('图片移动:', e.detail);
+    },
+  },
+});
+</script>
+
+<style lang="stylus">
+.movable-image
+  width 100%
+  height 100%
+  display flex
+  align-items center
+  justify-content center
+</style>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-popup": "@vant/weapp/popup/index",
+    "van-button": "@vant/weapp/button/index",
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}
+</script>

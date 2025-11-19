@@ -1,0 +1,270 @@
+<template>
+  <layout>
+    <view class="flex flex-col" style="height: {{contentMinHeight}}px;">
+      <bg />
+      <nav-bar id="step1" isBack="{{ false }}" />
+      <!-- <button bind:tap="onTest">test123</button> -->
+      <view class="flex-1 overflow-auto">
+        <scroll-view scroll-with-animation="{{ false }}" scroll-y scroll-top="{{ contentScrollTop }}"
+          class="h-full duration-0" bindscroll="onContentScroll" refresher-enabled="{{ true }}"
+          refresher-triggered="{{ isRefreshing }}" refresher-default-style="white" bindrefresherrefresh="onRefresh">
+          <view class="h-full flex flex-col">
+            <view id="home-header">
+              <!-- banner -->
+              <view class="py-30rpx" wx:if="{{ bannerList.length > 0 }}">
+                <swiper current="{{ currentBannerIndex }}" circular indicator-dots="{{ false }}" autoplay="{{ true }}"
+                  interval="{{ 3000 }}" class="h-300rpx" bind:change="onBannerChange">
+                  <block wx:for="{{ bannerList }}" wx:key="id">
+                    <swiper-item class="px-30rpx h-full" bind:tap="onClickBanner(item)">
+                      <image src="{{ item.imageUrl }}" alt="{{ item.altText }}" mode="aspectFill"
+                        class="w-full h-full rounded-32rpx" />
+                    </swiper-item>
+                  </block>
+                </swiper>
+              </view>
+
+              <!-- tab 导航栏 -->
+              <view id="template-tabs" ref="{{ templateTabsRef }}"
+                class="w-fit mx-auto bg-black/60 p-16rpx rounded-48rpx border border-solid border-#454545 {{ bannerList.length > 0 ? 'mt-18rpx' : 'mt-5' }}">
+                <view wx:for="{{ tabList }}" wx:key="name"
+                  class="inline-block py-20rpx px-64rpx rounded-32rpx leading-44rpx text-28rpx font-semibold {{ activeTab === item.name ? 'color-black bg-primary' : 'text-white' }}"
+                  bind:tap="onTabChange" data-name="{{ item.name }}">
+                  {{ item.title }}
+                </view>
+              </view>
+            </view>
+
+            <!-- tab 内容区域 -->
+            <rec-templates wx:ref="recTemplates" hasBanner="{{ bannerList.length > 0 }}"
+              class="flex-1 {{ activeTab === 'hot' ? 'block' : 'hidden' }}" />
+
+            <templates wx:ref="templates" class="flex-1 {{ activeTab === 'more' ? 'block' : 'hidden' }}"
+              isTabsSticky="{{ isTabsSticky }}" bind:tabChange="onStyleTabChange" />
+          </view>
+        </scroll-view>
+      </view>
+      <user-guide wx:if="{{ isLoggedIn && activeTab === 'hot' }}" pageKey="pages/home/index" options="{{ guideData }}"
+        bind:stepChange="onGuideStepChange" bind:end="onGuideEnd" />
+    </view>
+  </layout>
+</template>
+
+<script lang="ts">
+import { createPage } from "@mpxjs/core";
+import { tabSwitcher } from "../../custom-tab-bar/tabbar";
+import { mapState } from "@mpxjs/pinia";
+import { useAuthStore } from "@/store";
+import { getScrollContentHeight } from "@/utils/page";
+import { getBannerList } from "@/api/promotion";
+import { WownowBanner } from "@/types";
+
+const SHARE_TITLE = "WOWNOW AI 创作，一起开启灵感之旅";
+const SHARE_PATH = "/pages/home/index";
+
+createPage({
+  data: {
+    guideData: [
+      {
+        selector: "#rec-templates-active", // 节点选择器
+        tips: "从纪念币到特色卡片，多种风格任你挑选一键生成专属作品",
+        ref: "recTemplatesRef", // 组件实例。 不传则是wx对象
+        tipPosition: "top",
+      },
+      {
+        selector: "#template-tabs",
+        tips: "点击切换有更多模板选择，可以按风格Tab切换，从日漫到3D，发现更多灵感",
+        ref: "templateTabsRef",
+        tipPosition: "bottom",
+      },
+      {
+        selector: "#start-create",
+        tips: "点一下，开启创作之旅",
+        showGuideIcon: true,
+        ref: "recTemplatesRef",
+        tipPosition: "top",
+      },
+    ],
+    tabList: [
+      { title: "热门推荐", name: "hot" },
+      { title: "更多推荐", name: "more" },
+    ],
+    activeTab: "hot",
+    contentMinHeight: 0,
+    navBarHeight: 0,
+    contentScrollTop: 0,
+    isTabsSticky: false, // 控制templates组件的tabs是否吸顶
+    headerHeight: 0, // 缓存header高度
+    currentBannerIndex: 0,
+    bannerList: [] as WownowBanner[],
+    isRefreshing: false, // 下拉刷新状态
+  },
+  computed: {
+    ...mapState(useAuthStore, ["isLoggedIn"]),
+  },
+  async onReady() {
+    getApp().globalData.templateTabsRef = this.$refs.templateTabsRef;
+
+    setTimeout(() => {
+      const contentHeight = getScrollContentHeight();
+      this.setData({ contentMinHeight: contentHeight });
+    }, 200);
+  },
+
+  onShow() {
+    tabSwitcher(this);
+    wx.showShareMenu({
+      withShareTicket: true,
+      menus: ["shareAppMessage", "shareTimeline"],
+    });
+  },
+
+  onShareAppMessage() {
+    return {
+      title: SHARE_TITLE,
+      path: SHARE_PATH,
+    };
+  },
+
+  onShareTimeline() {
+    return {
+      title: SHARE_TITLE,
+      query: "",
+    };
+  },
+
+  onTest() {
+    wx.requestSubscribeMessage({
+      tmplIds: [
+        '3d70XzvvtYZt4LaF7Wc7UPhWCrod3eHvJZvqcF1Ziqc', // 主模板ID
+        "bN8HMOHMBUEdpCRDgnGD0SJ0fWERFt9EmoXo1D4WEQI",
+        "gMcTsr2rrB9UEp2pmUngpKNK7aJGJY-wwYO1rrIK0N0"
+      ],
+      success: (res) => {
+        console.log('subscribeMessage1 success: ', res)
+      },
+      fail: (err) => {
+        console.log('subscribeMessage fail: ', err)
+      }
+    })
+  },
+
+  onLoad() {
+    const windowInfo = wx.getWindowInfo();
+    this.navBarHeight = windowInfo.statusBarHeight + 44;
+
+    if (this.$refs?.loginModal) {
+      this.$refs.loginModal.show();
+    }
+
+    this.fetchBannerList();
+  },
+
+  methods: {
+    async fetchBannerList() {
+      try {
+        const res = await getBannerList("home_top");
+        if (res.code === 0 && res.data?.list) {
+          this.bannerList = res.data.list;
+        } else {
+          console.warn('failed to fetch banner list: ', res);
+        }
+      } catch (error) {
+        console.error('error fetching banner list: ', error);
+        wx.showToast({ title: "banner加载失败", icon: "none" });
+      }
+    },
+
+    onBannerChange(event: { detail: { current: number; source?: string } }) {
+      if (
+        event.detail.source &&
+        event.detail.source !== "" &&
+        this.currentBannerIndex !== event.detail.current
+      ) {
+        this.currentBannerIndex = event.detail.current;
+      }
+    },
+
+    async onRefresh() {
+      this.isRefreshing = true;
+      this.currentBannerIndex = 0;
+      try {
+        await this.fetchBannerList();
+        // 通知子组件刷新数据
+        if (this.activeTab === 'hot' && this.$refs.recTemplates) {
+          await this.$refs.recTemplates.refresh();
+        }
+        if (this.activeTab === 'more' && this.$refs.templates) {
+          await this.$refs.templates.initPromptStyles();
+        }
+        wx.showToast({ title: "刷新成功", icon: "none" });
+      } catch (error) {
+        console.error('刷新失败:', error);
+        wx.showToast({ title: "刷新失败", icon: "error" });
+      } finally {
+        this.isRefreshing = false;
+      }
+    },
+
+    onClickBanner(item: WownowBanner) {
+      wx.navigateTo({
+        url: `/subPackages/home/campaign?id=${item.campaignId}`
+      });
+    },
+
+    onGuideStepChange(event: any) { },
+
+    onGuideEnd() {
+      this.showGuide = false;
+    },
+
+    onTabChange(event: any) {
+      this.activeTab = event.currentTarget.dataset.name;
+    },
+
+    getScrollHeaderHeight(): Promise<number> {
+      return new Promise((resolve) => {
+        const query = this.createSelectorQuery();
+        query.select("#home-header").boundingClientRect();
+        query.exec((res) => {
+          const headerRect = res?.[0];
+          const headerHeight = headerRect?.height || 0;
+          resolve(headerHeight);
+        });
+      });
+    },
+
+    async onStyleTabChange(event: any) {
+      if (!this.headerHeight) {
+        this.headerHeight = await this.getScrollHeaderHeight();
+      }
+      this.setData({
+        contentScrollTop:
+          this.headerHeight + this.navBarHeight - event.detail.tabBarTop,
+      });
+    },
+
+    async onContentScroll(event: any) {
+      const { scrollTop } = event.detail;
+      if (!this.headerHeight) {
+        this.headerHeight = await this.getScrollHeaderHeight();
+      }
+      if (this.headerHeight > 0) {
+        // 当滚动距离大于等于header高度时，认为tabs处于吸顶状态
+        const isSticky = scrollTop >= this.headerHeight;
+        if (this.isTabsSticky !== isSticky) {
+          this.setData({ isTabsSticky: isSticky });
+        }
+      }
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "rec-templates": "@/components/rec-templates",
+    "templates": "@/components/templates"
+  }
+}
+</script>

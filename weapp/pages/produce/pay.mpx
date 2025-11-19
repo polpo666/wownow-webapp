@@ -1,0 +1,408 @@
+<template>
+  <!-- 禁止coupon-selector组件的滚动穿透 -->
+  <page-meta page-style="{{ showCouponSelector ? 'overflow: hidden;' : 'overflow: visible;' }}" />
+
+  <view class="h-screen flex flex-col bg-#0D0D0D text-white">
+    <!-- 顶部导航栏 -->
+    <nav-bar isBack="{{ true }}" title="下单生产" />
+
+    <view class="flex-1 overflow-auto">
+      <!-- 产品信息 -->
+      <view class="px-30rpx py-32rpx">
+        <view class="flex items-start gap-16rpx">
+          <!-- 产品图片 -->
+          <view class="w-160rpx h-160rpx rounded-32rpx overflow-hidden">
+            <image wx:if="{{ productImageUrl }}" src="{{ productImageUrl }}" class="w-full h-full" mode="aspectFit" />
+          </view>
+
+          <!-- 产品详情 -->
+          <view class="flex-1">
+            <text class="text-white text-32rpx font-medium mb-8rpx block">{{ chatTemplate?.name }}</text>
+
+            <view class="flex items-center gap-8rpx text-24rpx text-[#989898] my-12rpx">
+              <view wx:if="{{ category }}" class="px-8rpx py-4rpx bg-[#191919] rounded-12rpx">{{ category }}</view>
+              <view class="px-8rpx py-4rpx bg-[#191919] rounded-12rpx">{{ chatTemplate?.craftType }}</view>
+            </view>
+
+            <view class="flex items-center gap-8rpx text-24rpx text-[#989898] mt-4rpx">
+              <view wx:if="{{ nfcContent }}" class="flex items-center gap-4rpx">
+                <view class="px-8rpx py-4rpx bg-[#191919] rounded-12rpx">NFC</view>
+              </view>
+              <view class="px-8rpx py-4rpx bg-[#191919] rounded-12rpx">{{ processOption?.processType }}</view>
+              <view class="px-8rpx py-4rpx bg-[#191919] rounded-12rpx">×{{ quantity }}</view>
+            </view>
+          </view>
+
+          <!-- 价格 -->
+          <view class="text-right">
+            <view>
+              <text class="text-28rpx font-bold pr-8rpx">¥</text>
+              <text class="text-70rpx font-bold">{{ totalPrice }}</text>
+            </view>
+            <view wx:if="{{ discountedPrice }}" class="mt-8rpx">
+              <text class="text-28rpx line-through text-[#989898]">¥{{ price }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 加工时间 -->
+      <view class="px-30rpx w-1/2">
+        <view class="flex items-center gap-8rpx mb-22rpx">
+          <text class="text-#cccccc text-32rpx">加工时间</text>
+        </view>
+
+        <view class="border border-solid border-white rounded-24rpx p-18rpx">
+          <view class="text-white text-32rpx font-medium">{{ processOption?.processType }}</view>
+          <view class="text-26rpx mt-12rpx">预计时间：{{ processOption?.duration }}</view>
+        </view>
+      </view>
+
+      <!-- NFC配置 -->
+      <view wx:if="{{ nfcContent }}" class="px-6rpx py-8rpx">
+        <nfc edit="{{ false }}" />
+      </view>
+
+      <!-- 优惠券 -->
+      <view class="p-30rpx pb-32rpx">
+        <view class="flex gap-16rpx items-center">
+          <text class="text-#cccccc text-32rpx">优惠券</text>
+          <image src="../../assets/svgs/icon-ticket.svg" class="w-32rpx h-32rpx" mode="aspectFit" />
+        </view>
+        <view
+          class="rounded-24rpx bg-#232323 py-24rpx pl-30rpx pr-20rpx mt-16rpx flex justify-between items-center gap-12rpx active:opacity-70"
+          bind:tap="onClickCoupon">
+          <view class="text-28rpx text-white">共优惠</view>
+          <text class="ml-auto text-#d4d4d4 text-32rpx">-¥{{ couponPrice }}</text>
+          <van-icon name="arrow" size="14" color="#d4d4d4" />
+        </view>
+      </view>
+    </view>
+
+    <!-- 支付按钮 -->
+    <view class="w-full px-30rpx pt-24rpx pb-[calc(env(safe-area-inset-bottom)+24rpx)]">
+      <van-button block type="primary" custom-class="w-full" bind:click="onPayButtonClick">
+        确认支付 ¥{{ finalPrice }}
+      </van-button>
+    </view>
+
+    <!-- 订单确认弹窗 -->
+    <van-popup show="{{ showOrderModal }}" position="center" custom-class="bg-white rounded-24rpx p-32rpx"
+      bind:close="closeOrderModal" z-index="99999">
+      <view class="text-center text-black">
+        <view class="mb-12rpx text-32rpx">订单号: {{ orderSn }}</view>
+        <view class="text-32rpx mb-24rpx">金额: ¥{{ payAmount }}</view>
+        <van-button type="primary" custom-class="w-full bg-[#FADA39] text-black" bind:click="confirmOrder">
+          确认订单
+        </van-button>
+      </view>
+    </van-popup>
+  </view>
+
+  <van-popup show="{{ showCouponSelector }}" round position="bottom" custom-style="height: 80%;"
+    custom-class="!bg-#232323" bind:close="onCloseCouponSelector">
+    <coupon-selector totalPrice="{{ totalPrice }}" templateId="{{ chatTemplate?.id }}" bind:confirm="onCouponConfirm" />
+  </van-popup>
+</template>
+
+<script lang="ts">
+import { createPage } from "@mpxjs/core";
+import { useChatStore, useProduceStore } from "@/store";
+import type { ChatOutput } from "@/store/chat";
+import type { Asset } from "../../types/asset";
+import type { OrderCreateReq } from "../../types/order";
+import { updateAsset } from "@/api/asset";
+import { createOrder } from "@/api/order";
+import { usePay } from "@/utils/pay";
+import uuidv4 from "@/utils/uuid/uuidv4";
+import { WOWNOW_NFC_URL } from "@/lib/constants";
+import { mapState } from "@mpxjs/pinia";
+import { UserCoupon, NFCContent } from "@/types";
+import { createNfc, updateNfc } from "@/api/nfc";
+
+createPage({
+  data: {
+    orderSn: '',
+    payAmount: 0,
+    payHandler: null as any,
+    showCouponSelector: false,
+    couponPrice: 0,  // 优惠合计
+    selectedCouponIds: [] as number[],  // 选择的优惠券ID列表
+  },
+
+  computed: {
+    ...mapState(useProduceStore, [
+      'deviceId',
+      'productImageUrl',
+      'price',
+      'discountedPrice',
+      'processType',
+      'processOption',
+      'quantity',
+      'nfcContent',
+      'assetId',
+    ]),
+    ...mapState(useChatStore, ['chatTemplate', 'promptStyle', 'outputList']),
+
+    category() {
+      if (!this.chatTemplate) return '';
+
+      const labelSegments = this.chatTemplate.label.split("-");
+      return labelSegments[1] || labelSegments[0] || "";
+    },
+
+    // 商品总额
+    totalPrice() {
+      const currentPrice = this.discountedPrice || this.price || 0.01;
+      return parseFloat((currentPrice * this.quantity).toFixed(2));
+
+    },
+
+    // 最终支付金额
+    finalPrice() {
+      return parseFloat(Math.max(this.totalPrice - this.couponPrice, 0).toFixed(2));
+    }
+  },
+  onLoad() {
+    // 初始化支付功能
+    this.initPay();
+  },
+  onUnload() {
+    // 页面卸载时清理支付轮询
+    this.payHandler?.clearPayPolling();
+  },
+  methods: {
+    // 初始化支付功能
+    initPay() {
+      this.payHandler = usePay({
+        onSuccess: (orderSn: string) => {
+          wx.navigateTo({
+            url: `/subPackages/order/detail?orderSn=${orderSn}`
+          })
+        },
+        onError: (error: string) => {
+          console.error('支付失败:', error);
+          wx.showToast({
+            title: error || '支付失败',
+            icon: 'error'
+          });
+          setTimeout(() => {
+            wx.switchTab({ url: '/pages/order/index' });
+          }, 1000);
+        },
+        onCancel: () => {
+          console.log('用户取消支付');
+          wx.showToast({
+            title: '已取消支付',
+            icon: 'none'
+          });
+          setTimeout(() => {
+            wx.switchTab({ url: '/pages/order/index' });
+          }, 1000);
+        }
+      })
+    },
+    showOrderModal() {
+      const that = this;
+      that.payOrder(this.orderSn);
+      // wx.showModal({
+      //   title: '订单信息',
+      //   content: `订单号: ${this.orderSn}\n支付金额: ¥${this.payAmount}`,
+      //   confirmText: '确认',
+      //   cancelText: '取消',
+      //   success: (res) => {
+      //     console.log(res);
+      //     if (res.confirm) {
+      //       that.payOrder(this.orderSn);
+      //     } else {
+      //       wx.showToast({
+      //         title: '已取消',
+      //         icon: 'none',
+      //         duration: 2000,
+      //         success: () => {
+      //           wx.switchTab({
+      //             url: '/pages/order/index'
+      //           })
+      //         }
+      //       });
+      //     }
+      //   },
+      //   fail: () => {
+      //   }
+      // })
+    },
+    async onPayButtonClick() {
+      if (!this.chatTemplate?.processOptions) {
+        wx.showToast({
+          title: '没有加工选项',
+          icon: 'error'
+        });
+        return;
+      }
+
+      try {
+        wx.showLoading({ title: '创建订单中...', mask: true });
+
+        let nfcId = await uuidv4();
+        if (nfcId instanceof Uint8Array) {
+          nfcId = Array.from(nfcId).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+        let finalAssetId = this.assetId;
+        let linkVal = '';
+
+        // NFC未保存时先创建
+        if (this.nfcContent) {
+          const { type, text, attachments, link } = this.nfcContent;
+
+          linkVal = type === 'custom' ? `${WOWNOW_NFC_URL}/${nfcId}` : link;
+
+          const newNfc = {
+            id: nfcId,
+            type,
+            link: linkVal,
+            text: text || (type === 'custom' ? `WOWNOW (${new Date().toISOString().split('T')[0]})` : ''),
+            attachments,
+            assetId: this.assetId || undefined,
+          } as NFCContent;
+
+          const result = await createNfc(newNfc);
+          if (result.code !== 0 || !result.data) {
+            throw new Error(`NFC创建失败: ${result.message}` || 'NFC创建失败');
+          }
+        }
+
+        const asset: Asset = {
+          ...(this.assetId ? { id: this.assetId } : {}),
+          name: this.chatTemplate?.name,
+          generatedImageUrl: this.productImageUrl,
+          templateId: this.chatTemplate?.id,
+          styleId: this.outputList.find((item: ChatOutput) => item.imageUrl === this.productImageUrl)?.styleId || null,
+          nfcContent: this.nfcContent && linkVal ? { type: 'uri', value: linkVal } : null,
+          processingConfig: { processType: this.processOption?.processType },
+          orientation: this.chatTemplate?.orientation,
+        };
+
+        // 更新或创建资产
+        const res = await updateAsset(asset);
+        finalAssetId = res?.data?.id || this.assetId;
+        if (!finalAssetId) {
+          wx.showToast({
+            title: '资产保存失败',
+            icon: 'error'
+          });
+          return;
+        }
+
+        // NFC已保存但未关联资产时更新NFC
+        if (this.nfcContent && !this.assetId) {
+          await updateNfc({ id: nfcId, assetId: finalAssetId });
+        }
+
+        await this._createOrder(finalAssetId);
+      } catch (error) {
+        console.error('创建订单失败:', error);
+        wx.showToast({
+          title: '创建订单失败',
+          icon: 'error'
+        });
+      } finally {
+        wx.hideLoading();
+      }
+    },
+
+    async _createOrder(assetId: number) {
+      try {
+        const orderData: OrderCreateReq = {
+          deviceId: this.deviceId,
+          assetId,
+          productName: this.chatTemplate?.name || '订单名字',
+          productDesc: this.chatTemplate?.description || '订单描述',
+          amount: this.finalPrice,
+          quantity: this.quantity,
+          taskType: this.processOption?.taskType || '',
+          userCouponId: this.selectedCouponIds,
+        };
+
+        const response = await createOrder(orderData);
+
+        const data = response?.data;
+        const orderSn = data?.orderSn;
+        const payAmount = data?.payAmount;
+
+        if (orderSn && payAmount) {
+          // 显示订单确认弹窗
+          this.orderSn = orderSn;
+          this.payAmount = payAmount;
+          this.showOrderModal();
+        } else {
+          wx.showToast({
+            title: '订单创建失败，请稍后重试',
+            icon: 'error'
+          });
+          wx.switchTab({ url: '/pages/order/index' });
+        }
+      } catch (error) {
+        console.error('Order creation failed:', error);
+        wx.showToast({
+          title: error instanceof Error ? error.message : '创建订单失败',
+          icon: 'error'
+        });
+        wx.switchTab({ url: '/pages/order/index' });
+      }
+    },
+    async payOrder(orderSn: string) {
+      try {
+        await this.payHandler.payOrder(orderSn);
+      } catch (error) {
+        wx.showToast({
+          title: '支付失败',
+          icon: 'error'
+        });
+      } finally {
+        wx.hideLoading();
+      }
+    },
+
+    onClickCoupon() {
+      this.setData({ showCouponSelector: true });
+    },
+    onCloseCouponSelector() {
+      this.setData({ showCouponSelector: false });
+    },
+
+    onCouponConfirm(event: { detail: { coupons: UserCoupon[] } }) {
+      const selectedCoupons = event.detail.coupons;
+      let totalDiscount = 0;
+
+      selectedCoupons.forEach(coupon => {
+        if (coupon.type === "discount") {
+          const discountRate = coupon.discountRate || 100;
+          totalDiscount += ((this.totalPrice || 0) * (1 - discountRate / 100));
+        } else if (coupon.type === "cash") {
+          totalDiscount += coupon.discountAmount || 0;
+        } else if (coupon.type === 'free') {
+          totalDiscount += this.totalPrice - 0.01;
+        }
+      });
+
+      this.setData({
+        couponPrice: parseFloat(totalDiscount.toFixed(2)),
+        selectedCouponIds: selectedCoupons.map(c => c.id),
+      });
+      this.onCloseCouponSelector();
+    }
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-icon": "@vant/weapp/icon/index",
+    "van-popup": "@vant/weapp/popup/index",
+    "nfc": "@/components/nfc/index.mpx",
+    "coupon-selector": "@/components/coupon-selector/index.mpx"
+  }
+}
+</script>

@@ -1,0 +1,52 @@
+<template>
+  <view class="grid grid-cols-2 gap-16rpx p-30rpx">
+    <view wx:for="{{ skeletonList }}" wx:key="index" class="bg-[#2B2B2B] rounded-24rpx overflow-hidden">
+      <view class="w-full h-0 pb-[100%] relative bg-[#1A1A1A] rounded-t-24rpx">
+        <view class="absolute inset-0 animate-pulse bg-gradient-to-r from-[#1A1A1A] via-[#2A2A2A] to-[#1A1A1A]" />
+      </view>
+      <view class="p-20rpx flex items-center justify-between">
+        <view class="h-26rpx bg-[#404040] rounded flex-1 mr-8rpx animate-pulse" />
+        <view class="h-20rpx w-32rpx bg-[#404040] rounded animate-pulse" />
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core';
+
+createComponent({
+  properties: {
+    count: {
+      type: Number,
+      value: 8
+    }
+  },
+
+  data(): { skeletonList: number[] } {
+    return {
+      skeletonList: []
+    };
+  },
+
+  observers: {
+    count(newVal) {
+      this.setData({
+        skeletonList: new Array(newVal).fill(0)
+      });
+    }
+  },
+
+  attached() {
+    this.setData({
+      skeletonList: new Array(this.count).fill(0)
+    });
+  }
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true
+}
+</script>

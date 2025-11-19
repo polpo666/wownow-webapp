@@ -1,0 +1,70 @@
+<template>
+  <view id="category-popup" class="rounded-lg text-white text-[13px] flex justify-center items-center px-2 py-1  gap-2"
+    bindtap="switchCategory" style="border: 1px solid #575757;">
+    <image class="w-24rpx h-24rpx" src="../../../assets/category.png" mode="aspectFill" />
+    切换分类
+  </view>
+  <van-popup show="{{ show }}" bind:close="onClose" z-index="99999" custom-class="!bg-transparent">
+    <view class="relative w-311px h-203px rounded-16px bg-#545454 flex flex-col justify-start items-start p-48rpx">
+      <text class="text-white text-36rpx font-400">切换品类提醒</text>
+      <text class="text-white text-28rpx font-400 mt-20rpx">切换品类后会清空当前对话里的所有图片，是否继续？</text>
+      <view class="flex justify-end items-end gap-20rpx mt-auto absolute bottom-48rpx right-48rpx">
+        <van-button
+          custom-class="w-200rpx h-110rpx rounded-16px !bg-#232323 !text-white text-32rpx font-600 !border-1px !border-solid !border-#575757"
+          bind:click="onCancel">取消</van-button>
+        <van-button
+          custom-class="w-200rpx h-110rpx rounded-16px !bg-#FADA39 !text-black text-32rpx font-600 !border-1px !border-solid !border-#575757"
+          bind:click="onContinue">继续</van-button>
+      </view>
+    </view>
+  </van-popup>
+</template>
+
+<script>
+import { createComponent } from "@mpxjs/core";
+import { mapActions } from "pinia";
+import { useChatStore } from "@/store/chat";
+
+createComponent({
+  data: {
+    show: false,
+  },
+  methods: {
+    ...mapActions(useChatStore, ["resetChatStore"]),
+    switchCategory() {
+      this.setData({
+        show: true,
+      })
+    },
+    onCancel() {
+      this.setData({
+        show: false,
+      })
+    },
+    onContinue() {
+      this.setData({
+        show: true,
+      })
+      this.resetChatStore()
+      wx.redirectTo({
+        url: "/pages/create/category"
+      })
+    },
+    onClose() {
+      this.setData({
+        show: false,
+      })
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-popup": "@vant/weapp/popup/index",
+    "van-button": "@vant/weapp/button/index"
+  }
+}
+</script>

@@ -1,0 +1,188 @@
+<template>
+  <view class="h-screen flex flex-col bg-black pb-[env(safe-area-inset-bottom)]">
+    <nav-bar title="资产详情" isBack="{{ true }}" />
+    <view class="flex-1 w-full flex justify-center items-center py-32rpx">
+      <image wx:if="{{ asset?.generatedImageUrl }}" src="{{ asset?.generatedImageUrl }}" class="w-full h-full"
+        mode="aspectFit" />
+      <view wx:else class="text-gray-400">
+        <text>暂无图片</text>
+      </view>
+    </view>
+    <view class="w-full flex gap-16rpx py-20rpx px-32rpx">
+      <view class="flex-1">
+        <van-button type="primary" custom-class="w-full" bind:tap="onCreate">
+          我要二创
+        </van-button>
+      </view>
+      <view class="flex-1">
+        <van-button type="primary" custom-class="w-full" bind:tap="onProduction">
+          直接下单
+        </van-button>
+      </view>
+      <view>
+        <van-button type="primary" custom-class="w-full" bind:tap="deleteAsset"
+          custom-style="background-color: #232323; border: none;">
+          <van-icon name="delete-o" color="red" size="46rpx" />
+        </van-button>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+import { Asset } from '@/types/asset';
+import { deleteAsset, getAssetDetail } from '@/api/asset';
+import { getTemplateDetail } from '@/api/template';
+import { useProduceStore, useChatStore } from "@/store";
+import { mapState, mapActions } from "@mpxjs/pinia";
+
+createPage({
+  data: {
+    asset: null as Asset | null,
+    isLoading: false
+  },
+
+  computed: {
+    ...mapState(useChatStore, ['chatTemplate'])
+  },
+
+  onLoad(options: any) {
+    const { id } = options;
+    if (id) {
+      this.loadAssetDetail(Number(id));
+    }
+  },
+
+  onShow() {
+    // 页面显示时的逻辑
+  },
+
+  methods: {
+    ...mapActions(useProduceStore, ['setAssetId', 'setProductImageUrl']),
+    ...mapActions(useChatStore, ['setChatTemplate', 'resetChatStore', 'setAttachment', 'setAssetStyleId']),
+    async loadAssetDetail(id: number) {
+      try {
+        this.isLoading = true;
+        const res = await getAssetDetail(id);
+        if (res.code === 0 && res.data) {
+          this.asset = res.data;
+        }
+      } catch (error) {
+        console.error('加载资产详情失败:', error);
+        wx.showToast({
+          title: '加载失败',
+          icon: 'error'
+        });
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    onBack() {
+      wx.navigateBack();
+    },
+
+    async onCreate() {
+      if (!this.asset) {
+        wx.showToast({
+          title: '资产详情未加载完成，请稍后再试',
+          icon: 'error'
+        });
+        return;
+      }
+      if (this.asset?.templateId) {
+        this.resetChatStore();
+        await this.fetchTemplate(this.asset.templateId);
+      }
+
+      if (this.asset.generatedImageUrl) {
+        this.setAttachment({ name: '', url: this.asset.generatedImageUrl, contentType: '' });
+      }
+
+      if (typeof this.asset.styleId === 'number') {
+        this.setAssetStyleId(this.asset.styleId);
+      }
+
+      wx.navigateTo({
+        url: '/subPackages/chat/index'
+      });
+    },
+
+    async fetchTemplate(templateId: number) {
+      try {
+        const result = await getTemplateDetail(templateId);
+        if (result.code === 0 && result.data) {
+          this.setChatTemplate(result.data);
+        } else {
+          console.error(result.message);
+        }
+      } catch (error) {
+        console.error('Error fetching template detail:', error);
+      }
+    },
+
+    async onProduction() {
+      if (this.isLoading || !this.asset) {
+        wx.showToast({
+          title: '资产详情未加载完成，请稍后再试',
+          icon: 'error'
+        });
+
+        return;
+      }
+      this.setAssetId(this.asset?.id || null);
+      this.setProductImageUrl(this.asset?.generatedImageUrl || '');
+      if (this.asset?.templateId) {
+        await this.fetchTemplate(this.asset.templateId);
+      }
+
+      // 跳转到定制生产页面
+      wx.navigateTo({
+        url: `/subPackages/produce/index`
+      });
+    },
+
+    deleteAsset() {
+      wx.showModal({
+        title: '删除资产',
+        content: `确定要删除此资产吗？`,
+        confirmText: '确认',
+        cancelText: '取消',
+        success: (res) => {
+          if (res.confirm) {
+            // todo 删除资产
+            deleteAsset(this.asset?.id || 0).then(res => {
+              if (res.code === 0) {
+                wx.showToast({
+                  title: '资产已删除',
+                  icon: 'success',
+                  duration: 1500,
+                  complete: () => {
+                    wx.navigateBack();
+                  }
+                });
+
+              } else {
+                wx.showToast({
+                  title: '删除资产失败',
+                  icon: 'error'
+                });
+              }
+            })
+          }
+        }
+      });
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}
+</script>

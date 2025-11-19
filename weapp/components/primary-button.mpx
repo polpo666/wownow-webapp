@@ -1,0 +1,32 @@
+<template>
+  <button
+    class="bg-yellow-400 text-black font-bold rounded-xl transition-all duration-200 {{ disabled ? 'bg-gray-400' : '' }}"
+    disabled="{{ disabled }}" bindtap="handleClick">
+    <slot></slot>
+  </button>
+</template>
+
+<script lang="ts">
+import { createComponent } from '@mpxjs/core'
+
+createComponent({
+  data: {
+    disabled: false
+  },
+  methods: {
+    handleClick(e: any) {
+      this.triggerEvent('click', e)
+    }
+  }
+})
+</script>
+
+<script type="application/json">
+{
+  "component": true
+}
+</script>
+
+<style>
+/* 基础样式通过 UnoCSS 类名控制 */
+</style>

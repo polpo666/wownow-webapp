@@ -1,0 +1,75 @@
+<template>
+  <view>
+    <bg />
+    <nav-bar title="兑换优惠券" isBack="{{ true }}" />
+    <!-- 主内容区 -->
+    <view class="p-30rpx">
+      <view class="bg-[#232323] rounded-32rpx p-32rpx">
+        <input
+          class="w-full text-white text-28rpx placeholder:text-white/50 focus:outline-none"
+          type="text"
+          placeholder="请输入兑换券号码"
+          bindinput="handleInput"
+          value="{{ inputValue }}"
+          confirm-type="done"
+          maxlength="{{ 100 }}"
+        />
+      </view>
+      
+      <view class="pt-48rpx">
+        <van-button 
+          type="primary" 
+          custom-class="w-full !border-none {{ disabled ? '!bg-#7A7A7A !text-#9C9C9C !opacity-100' : '!bg-#FADA39 !text-#0A0A0A' }}" 
+          bind:click="onRedeem" 
+          disabled="{{ disabled }}"
+        >
+          兑换优惠券
+        </van-button>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { receiveCouponByCode } from '@/api/promotion';
+import { createPage } from '@mpxjs/core';
+
+createPage({
+  data: {
+    inputValue: '',
+  },
+  computed: {
+    disabled() {
+      return this.inputValue.trim().length === 0;
+    }
+  },
+  methods: {
+    async onRedeem() {
+      if (this.disabled) return;
+      try {
+        const res = await receiveCouponByCode(this.inputValue.trim());
+        if (res.code === 0 && res.data?.success) {
+          this.inputValue = '';
+          wx.showToast({ title: res.data.msg || '兑换成功', icon: 'success' });
+        } else {
+          wx.showToast({ title: res.message || '兑换失败', icon: 'none' });
+        }
+      } catch (error) {
+        console.error('failed to redeem coupon:', error);
+        wx.showToast({ title: "兑换失败: " + (error.errMsg || "未知错误"), icon: 'none' });
+      }
+    },
+    handleInput(event: any) {
+      this.inputValue = event.detail.value;
+    }
+  },
+})
+</script>
+
+<script type="application/json">
+  {
+    "usingComponents": {
+      "van-button": "@vant/weapp/button/index"
+    }
+  }
+</script>

@@ -1,0 +1,151 @@
+<template>
+  <view class="relative">
+    <!-- Audio info and progress -->
+    <view class="flex items-center">
+      <view class="h-16rpx bg-black/35 rounded-full flex-1 mr-24rpx">
+        <view class="h-full bg-white/75 rounded-full transition-all relative" style="width: {{ progress }}%;">
+          <view class="w-36rpx h-36rpx bg-white absolute top-1/2 -translate-y-1/2 -right-18rpx rounded-full"></view>
+        </view>
+      </view>
+      <!-- Delete button -->
+      <view class="w-76rpx h-76rpx" bind:tap="handleDelete" data-url="{{ attachment.url }}">
+        <image src="../../../assets/svgs/icon-nfc-cancel.svg" mode="aspectFill" class="w-full h-full" />
+      </view>
+    </view>
+
+    <view class="flex justify-between items-center pr-100rpx">
+      <text class="text-white text-24rpx mr-32rpx">{{ currentTimeFormatted }} / {{ durationFormatted }}</text>
+      <text class="flex-1 text-white text-24rpx truncate">{{ attachment.name}}</text>
+    </view>
+
+    <!-- Play/Pause button -->
+    <view class="mx-auto mt-48rpx w-144rpx h-144rpx bg-white rounded-full flex items-center justify-center" bind:tap="togglePlay">
+      <van-icon wx:if="{{ !isPlaying }}" name="play" color="#3220D4" size="80rpx" />
+      <van-icon wx:else name="pause" color="#3220D4" size="80rpx" />
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from "@mpxjs/core";
+import type { Attachment } from "@/types/base";
+
+createComponent({
+  properties: {
+    attachment: {
+      type: Object,
+      value: {} as Attachment,
+    },
+  },
+  data: {
+    isPlaying: false,
+    currentTime: 0,
+    duration: 0,
+    audioContext: null as WechatMiniprogram.InnerAudioContext | null,
+  },
+  computed: {
+    progress() {
+      return this.duration > 0 ? (this.currentTime / this.duration) * 100 : 0;
+    },
+    currentTimeFormatted() {
+      return this.formatTime(this.currentTime);
+    },
+    durationFormatted() {
+      return this.formatTime(this.duration);
+    },
+  },
+  attached() {
+    this.initAudio();
+  },
+  detached() {
+    this.destroyAudio();
+  },
+  methods: {
+    initAudio() {
+      if (this.data.audioContext) {
+        this.destroyAudio();
+      }
+
+      const audioContext = wx.createInnerAudioContext();
+      audioContext.src = this.data.attachment.url;
+
+      audioContext.onCanplay(() => {
+        // 延迟获取 duration，确保能拿到真实时长
+        setTimeout(() => {
+          if (
+            audioContext.duration &&
+            audioContext.duration !== this.data.duration
+          ) {
+            this.setData({ duration: audioContext.duration });
+          }
+        }, 200);
+      });
+
+      audioContext.onTimeUpdate(() => {
+        this.setData({ currentTime: audioContext.currentTime });
+        // 如果 duration 还没拿到，尝试在 timeupdate 时获取
+        if (
+          (!this.data.duration || this.data.duration === 0) &&
+          audioContext.duration
+        ) {
+          this.setData({ duration: audioContext.duration });
+        }
+      });
+
+      audioContext.onEnded(() => {
+        this.setData({ isPlaying: false, currentTime: 0 });
+      });
+
+      audioContext.onError((error) => {
+        console.error("Audio error:", error);
+        wx.showToast({ title: "音频播放失败", icon: "none" });
+      });
+
+      this.setData({ audioContext });
+    },
+
+    destroyAudio() {
+      if (this.data.audioContext) {
+        this.data.audioContext.destroy();
+        this.setData({ audioContext: null });
+      }
+    },
+
+    togglePlay() {
+      if (!this.data.audioContext) return;
+
+      if (this.data.isPlaying) {
+        this.data.audioContext.pause();
+        this.setData({ isPlaying: false });
+      } else {
+        this.data.audioContext.play();
+        this.setData({ isPlaying: true });
+      }
+    },
+
+    formatTime(time: number): string {
+      if (!time || time === 0) return "00:00";
+      const minutes = Math.floor(time / 60);
+      const seconds = Math.floor(time % 60);
+      return `${minutes.toString().padStart(2, "0")}:${seconds
+        .toString()
+        .padStart(2, "0")}`;
+    },
+
+    handleDelete(e: WechatMiniprogram.BaseEvent) {
+      this.destroyAudio();
+      const url = e.currentTarget.dataset.url;
+      this.triggerEvent("delete", { url });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {
+    "van-icon": "@vant/weapp/icon/index"
+  }
+}
+</script>

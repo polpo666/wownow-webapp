@@ -1,0 +1,353 @@
+<template>
+  <view>
+    <bg />
+    <nav-bar title="售后服务" isBack="{{ true }}" />
+
+    <!-- 主要内容区域 -->
+    <view class="p-32rpx">
+      <view class="bg-[#232323] rounded-24rpx p-32rpx">
+        <!-- 问题描述 -->
+        <view class="mb-32rpx">
+          <text class="text-32rpx font-medium text-[#ccc] mb-32rpx block">请说明你遇到的情况：</text>
+
+          <!-- 情况选择标签 -->
+          <view class="flex flex-wrap gap-16rpx">
+            <view
+              wx:for="{{ situationOptions }}"
+              wx:key="value"
+              class="px-24rpx py-16rpx mb-10rpx rounded-12rpx text-28rpx {{ selectedSituation === item.value ? 'bg-yellow-400 text-black' : 'bg-[#404040] text-white' }}"
+              bindtap="selectSituation"
+              data-value="{{ item.value }}"
+            >
+              {{ item.label }}
+            </view>
+          </view>
+        </view>
+
+        <!-- 其他原因文本域 -->
+        <view wx:if="{{ selectedSituation === 'other' }}" class="mb-32rpx">
+          <view class="relative">
+            <textarea
+              class="w-full min-h-420rpx bg-[#393939] rounded-18rpx p-24rpx pb-60rpx text-28rpx text-white"
+              placeholder="这里是情况描述"
+              value="{{ description }}"
+              maxlength="{{ 200 }}"
+              bindinput="onDescriptionInput"
+            />
+            <!-- 字数计数器 - 放在文本域内部右下角 -->
+            <view class="absolute bottom-20rpx right-32rpx text-24rpx text-gray-500 pointer-events-none">
+              {{ description.length }}/200
+            </view>
+          </view>
+        </view>
+
+        <!-- 图片证明 -->
+        <!-- <view class="mb-8rpx">
+          <text class="text-32rpx font-medium text-[#ccc] mb-16rpx block">图片证明（至多上传3张图片）</text>
+
+          <view class="flex flex-wrap gap-26rpx mt-32rpx ">
+            <view
+              wx:for="{{ uploadedImages }}"
+              item="{{ item }}"
+              wx:key="index"
+              class="relative w-160rpx h-160rpx"
+            >
+              <image
+                src="{{ item.url }}"
+                class="w-full h-full rounded-12rpx object-cover border-2rpx border-gray-200"
+                bindtap="previewImage"
+                data-url="{{ item.url }}"
+              />
+
+              <view
+                class="absolute -top-8rpx -right-8rpx w-32rpx h-32rpx bg-black bg-opacity-60 rounded-full flex items-center justify-center"
+                bindtap="deleteImage"
+                data-index="{{ index }}"
+              >
+                <text class="text-white text-24rpx">×</text>
+              </view>
+            </view>
+
+            <view
+              wx:if="{{ uploadedImages.length < 3 }}"
+              class="w-160rpx h-160rpx border-2rpx border-dashed border-[#a1a1a1] rounded-22rpx flex items-center justify-center"
+              bindtap="chooseImage"
+            >
+              <text class="text-72rpx text-gray-400">+</text>
+            </view>
+          </view>
+        </view> -->
+      </view>
+    </view>
+
+    <!-- 提交按钮 -->
+    <view class="fixed w-full bottom-80rpx px-32rpx">
+      <van-button
+        type="primary"
+        custom-class="w-full"
+        custom-style="{{ !canSubmit ? 'background-color: #ccc !important; border: none !important' : '' }}"
+        :disabled="{{ !canSubmit }}"
+        bindtap="submitAfterService"
+      >
+        提交
+      </van-button>
+    </view>
+
+    <!-- 图片预览弹窗 -->
+    <van-popup
+      show="{{ showImagePreview }}"
+      position="center"
+      custom-class="bg-black"
+      bindclose="closeImagePreview"
+    >
+      <view class="relative w-600rpx h-600rpx bg-black rounded-12rpx overflow-hidden">
+        <image
+          src="{{ previewImageUrl }}"
+          class="w-full h-full object-contain"
+        />
+        <view
+          class="absolute top-16rpx right-16rpx w-48rpx h-48rpx bg-black bg-opacity-60 rounded-full flex items-center justify-center"
+          bindtap="closeImagePreview"
+        >
+          <text class="text-white text-32rpx">×</text>
+        </view>
+      </view>
+    </van-popup>
+  </view>
+</template>
+
+<script lang="ts">
+import { createPage } from '@mpxjs/core';
+import { ossUploadPresign, uploadToOSS } from '@/api/upload';
+import { refundOrder } from '@/api/order';
+import { OrderRefundReq } from '@/types/order';
+
+interface UploadedImage {
+  url: string;
+  ossKey: string;
+}
+
+interface SituationOption {
+  label: string;
+  value: string;
+}
+
+interface AfterServiceData {
+  orderSn: string;
+  payAmount: number;
+  situationOptions: SituationOption[];
+  selectedSituation: string;
+  description: string;
+  uploadedImages: UploadedImage[];
+  showImagePreview: boolean;
+  previewImageUrl: string;
+  submitLoading: boolean;
+}
+
+createPage({
+  data(): AfterServiceData {
+    return {
+      orderSn: '',
+      payAmount: 0,
+      situationOptions: [
+        { label: '选错品类了', value: 'wrong_category' },
+        { label: '选错工艺了', value: 'wrong_process' },
+        { label: '排队时间过长', value: 'long_wait' },
+        { label: '其他原因', value: 'other' }
+      ],
+      selectedSituation: '',
+      description: '',
+      uploadedImages: [],
+      showImagePreview: false,
+      previewImageUrl: '',
+      submitLoading: false
+    }
+  },
+
+  computed: {
+    canSubmit() {
+      if (!this.selectedSituation) return false;
+      if (this.selectedSituation === 'other' && !this.description.trim()) return false;
+      return true;
+    }
+  },
+
+  onLoad(options: {
+    orderSn?: string,
+    payAmount?: string
+  }) {
+    console.log(options);
+    if (options?.orderSn) {
+      this.orderSn = options.orderSn;
+    }
+
+    if (options?.payAmount) {
+      this.payAmount = Number(options.payAmount);
+    }
+  },
+
+  onShow() {
+  },
+
+  methods: {
+    // 选择情况
+    selectSituation(e: any) {
+      const value = e.currentTarget.dataset.value;
+      this.selectedSituation = value;
+      if (value !== 'other') {
+        this.description = '';
+      }
+    },
+
+    // 输入描述
+    onDescriptionInput(e: any) {
+      this.description = e.detail.value;
+    },
+
+    // 选择图片
+    async chooseImage() {
+      try {
+        const res = await wx.chooseMedia({
+          count: 3 - this.uploadedImages.length,
+          mediaType: ['image'],
+          sourceType: ['album', 'camera']
+        });
+
+        // 立即上传选中的图片
+        for (const file of res.tempFiles) {
+          await this.uploadSingleImage(file);
+        }
+      } catch (error) {
+        wx.showToast({
+          title: '选择图片失败',
+          icon: 'error'
+        });
+      }
+    },
+
+    // 上传单张图片
+    async uploadSingleImage(file: WechatMiniprogram.MediaFile) {
+      try {
+        wx.showLoading({ title: '上传中...' });
+
+        // 生成文件名
+        const tempFilePath = file.tempFilePath;
+        const randomStr = Math.random().toString(36).substring(2);
+        const fileName = `after-service/${randomStr}.png`;
+
+        // 获取上传凭证
+        const presignRes = await ossUploadPresign({
+          filename: fileName,
+          contentType: 'image/png',
+          size: file.size
+        });
+
+        if (presignRes.code !== 0) {
+          throw new Error('获取上传凭证失败');
+        }
+
+        // 上传到OSS
+        await uploadToOSS(tempFilePath, presignRes?.data?.uploadUrl || '', 'image/png');
+
+        // 添加到已上传列表
+        this.uploadedImages.push({
+          url: presignRes?.data?.publicUrl || '',
+          ossKey: fileName
+        });
+
+        wx.hideLoading();
+        wx.showToast({
+          title: '上传成功',
+          icon: 'success'
+        });
+      } catch (error) {
+        wx.hideLoading();
+        console.error('上传图片失败:', error);
+        wx.showToast({
+          title: '上传失败',
+          icon: 'error'
+        });
+      }
+    },
+
+    // 删除图片
+    deleteImage(e: any) {
+      const index = e.currentTarget.dataset.index;
+      this.uploadedImages.splice(index, 1);
+    },
+
+    // 预览图片
+    previewImage(e: any) {
+      const url = e.currentTarget.dataset.url;
+      this.previewImageUrl = url;
+      this.showImagePreview = true;
+    },
+
+    // 关闭图片预览
+    closeImagePreview() {
+      this.showImagePreview = false;
+      this.previewImageUrl = '';
+    },
+
+    getSituation() {
+      const value = this.selectedSituation;
+      if (value === 'other') {
+        return this.description;
+      } else {
+        return this.situationOptions.find(opt => opt.value === value)?.label || value;
+      }
+    },
+
+    // 提交售后申请
+    async submitAfterService() {
+      if (!this.canSubmit) return;
+
+      try {
+        wx.showLoading({ title: '提交中...' });
+        // 准备提交数据
+        const situation = this.getSituation();
+        const submitData: OrderRefundReq = {
+          orderSn: this.orderSn,
+          amount: this.payAmount,
+          reason: situation,
+        };
+
+        const res = await refundOrder(submitData);
+        if (res.code === 0 && res.data?.refundSn) {
+          wx.showToast({
+            title: '提交成功',
+            icon: 'success'
+          });
+
+          setTimeout(() => {
+            wx.navigateBack();
+          }, 500);
+        } else {
+          wx.showToast({
+            title: res.message || '提交失败',
+            icon: 'error'
+          });
+          console.error(res);
+        }
+      } catch (error) {
+        console.error('提交失败:', error);
+        wx.showToast({
+          title: '提交失败',
+          icon: 'error'
+        });
+      } finally {
+        wx.hideLoading();
+      }
+    }
+  }
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-button": "@vant/weapp/button/index",
+    "van-popup": "@vant/weapp/popup/index"
+  }
+}
+</script>

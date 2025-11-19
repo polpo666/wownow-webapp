@@ -1,0 +1,49 @@
+<template>
+  <view class="relative">
+    <video
+      src="{{ attachment.url }}"
+      class="w-full aspect-video max-h-60vw rounded-32rpx"
+      controls
+      loop
+      show-center-play-btn="{{ true }}"
+      show-fullscreen-btn="{{ true }}"
+      picture-in-picture-mode="{{[]}}"
+      show-background-playback-button="{{false}}"
+      object-fit="contain"
+    />
+    <!-- Delete button -->
+    <view class="absolute -top-20rpx -right-20rpx" bind:tap="handleDelete" data-url="{{ attachment.url }}">
+      <image src="../../../assets/svgs/icon-nfc-cancel.svg" class="w-76rpx h-76rpx" />
+    </view>
+  </view>
+</template>
+
+<script lang="ts">
+import { createComponent } from "@mpxjs/core";
+import type { Attachment } from "@/types/base";
+
+createComponent({
+  properties: {
+    attachment: {
+      type: Object,
+      value: {} as Attachment,
+    },
+  },
+  ready() {
+    console.log('Video player ready', this.attachment);
+  },
+  methods: {
+    handleDelete(e: WechatMiniprogram.BaseEvent) {
+      const url = e.currentTarget.dataset.url;
+      this.triggerEvent("delete", { url });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "component": true,
+  "usingComponents": {}
+}
+</script>

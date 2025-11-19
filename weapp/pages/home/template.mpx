@@ -1,0 +1,271 @@
+<template>
+  <layout>
+    <view class="h-screen pb-[env(safe-area-inset-bottom)] flex flex-col">
+      <bg />
+      <nav-bar isBack="{{ true }}" title="" />
+      <view class="flex-1 overflow-y-auto overflow-x-hidden">
+        <block wx:if="{{ isLoading }}">
+          <view class="w-full h-[725rpx] bg-[#363636]"></view>
+          <view class="py-48rpx px-32rpx animate-pulse">
+            <view class="flex items-center justify-between mb-32rpx">
+              <view class="h-[48rpx] w-[40%] bg-[#444] rounded"></view>
+              <view class="h-[48rpx] w-[20%] bg-[#444] rounded"></view>
+            </view>
+            <view class="h-[32rpx] w-[60%] bg-[#444] rounded mb-32rpx"></view>
+            <view class="flex flex-wrap gap-2 mb-32rpx">
+              <block wx:for="{{ [1,2,3,4] }}" wx:key="index">
+                <view class="h-[40rpx] w-[80rpx] bg-[#444] rounded-[12px]"></view>
+              </block>
+            </view>
+          </view>
+        </block>
+
+        <block wx:else>
+          <!-- 图片轮播 -->
+          <view class="relative">
+            <swiper
+              class="w-full h-46vh max-h-[725rpx] bg-[#363636]"
+              autoplay="{{ false }}"
+              interval="{{ 3000 }}"
+              duration="{{ 500 }}"
+              circular="{{ true }}"
+              bind:change="onSwiperChange"
+              current="{{ currentSwiperIndex }}"
+            >
+              <block wx:for="{{ swiperImages }}" wx:key="*this">
+                <swiper-item>
+                  <van-image
+                    fit="contain"
+                    width="100%"
+                    height="100%"
+                    src="{{ item }}"
+                    bind:tap="previewImage"
+                    data-url="{{ item }}"
+                  />
+                </swiper-item>
+              </block>
+            </swiper>
+            <!-- 自定义轮播指示器 -->
+            <view class="absolute bottom-4 right-4 bg-black/50 text-white px-2 py-[2px] rounded-[10px] text-sm">
+              {{ currentSwiperIndex + 1 }}/{{ swiperImages.length }}
+            </view>
+          </view>
+
+          <!-- 模板信息 -->
+          <view class="py-48rpx px-32rpx">
+            <view class="flex items-center justify-between">
+              <text class="text-[48rpx] font-medium text-white break-all whitespace-pre-wrap">{{ templateDetail?.name || "" }}</text>
+              <view wx:if="{{ defaultOption?.discountedPrice }}">
+                <!-- 折扣价 -->
+                <text class="text-[40rpx] font-medium text-primary">¥</text>
+                <text class="text-[80rpx] font-medium text-primary mr-16rpx">{{ defaultOption.discountedPrice }}</text>
+                <!-- 原价 -->
+                <text class="text-[28rpx] text-white/55 line-through">¥{{ defaultOption?.price || 0.01 }}</text>
+              </view>
+              <view wx:else>
+                <text class="text-[48rpx] text-white font-bold">¥{{ defaultOption?.price || 0.01 }}</text>
+              </view>
+            </view>
+            <view class="text-[32rpx] font-normal text-white mt-32rpx break-all whitespace-pre-wrap">{{ templateDetail?.description || "暂无描述" }}</view>
+            <view class="flex flex-wrap gap-2 mt-32rpx">
+              <block wx:for="{{ tagList }}" wx:key="key">
+                <view wx:if="{{ item.value }}" class="text-white text-26rpx px-32rpx py-16rpx border border-solid border-#575757 rounded-24rpx">
+                  {{ item.value }}
+                </view>
+              </block>
+            </view>
+          </view>
+        </block>
+      </view>
+
+      <!-- 底部按钮组 -->
+      <view class="flex px-30rpx py-16rpx gap-16rpx" wx:if="{{ templateDetail }}">
+        <view class="flex-1">
+          <van-button block type="primary" bind:click="onCreate">我要二创</van-button>
+        </view>
+        <view class="flex-1">
+          <van-button block type="primary" bind:click="handleProduction">直接下单</van-button>
+        </view>
+      </view>
+    </view>
+  </layout>
+</template>
+
+<script lang="ts">
+import { createPage } from "@mpxjs/core";
+import { mapState, mapActions } from "@mpxjs/pinia";
+import { useAuthStore, useChatStore, useProduceStore } from "@/store";
+import { WownowTemplate } from "@/types";
+import { getTemplateDetail } from "@/api/template";
+
+createPage({
+  data: {
+    templateDetail: null as WownowTemplate | null,
+    isLoading: false,
+    currentSwiperIndex: 0,
+  },
+  computed: {
+    ...mapState(useAuthStore, ['isLoggedIn', 'hasExpired']),
+    defaultOption() {
+      const options = this.templateDetail?.processOptions;
+      if (Array.isArray(options) && options.length > 0) {
+        return options.find((opt) => opt && opt.default) || null;
+      }
+      return null;
+    },
+    swiperImages() {
+      if (!this.templateDetail) return [];
+      const images = [];
+      if (this.templateDetail.coverUrl) {
+        images.push(this.templateDetail.coverUrl);
+      }
+      if (
+        this.templateDetail.threeDimensionUrls &&
+        this.templateDetail.threeDimensionUrls.length > 0
+      ) {
+        images.push(...this.templateDetail.threeDimensionUrls);
+      }
+      return images;
+    },
+    tagList() {
+      const t = this.templateDetail;
+      if (!t) return [];
+      const labelSegments = t.label.split("-");
+      const category = labelSegments[1] || labelSegments[0] || "";
+      return [
+        { key: "materialDescription", value: t.materialDescription },
+        { key: "shapeSize", value: t.shapeSize },
+        { key: "category", value: category },
+        { key: "craftType", value: t.craftType },
+        { key: "styleName", value: t.styleName },
+        { key: "sceneDescription", value: t.sceneDescription },
+      ];
+    },
+  },
+  onLoad() {
+    const { id } = this.options;
+    if (id) {
+      this.fetchTemplateDetail(Number(id));
+    }
+  },
+  methods: {
+    ...mapActions(useAuthStore, ['setShowLoginModal', 'logout']),
+    ...mapActions(useProduceStore, ["setPrice", "setDiscountedPrice", "setProductImageUrl", "setAssetId"]),
+    ...mapActions(useChatStore, ["setChatTemplate", "resetChatStore", "setAttachment"]),
+
+    async fetchTemplateDetail(id: number) {
+      this.isLoading = true;
+      try {
+        const response = await getTemplateDetail(id)
+        if (response.code === 0 && response.data) {
+          this.templateDetail = response.data
+        } else {
+          wx.showToast({ title: "获取模板详情失败", icon: "none" });
+        }
+      } catch (error) {
+        console.error(error);
+        wx.showToast({ title: "获取模板详情失败", icon: "none" });
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+    // 预览图片
+    previewImage(e: any) {
+      if (!this.swiperImages || this.swiperImages.length === 0) return;
+
+      const { url } = e.currentTarget.dataset;
+      wx.previewImage({
+        current: url,
+        urls: this.swiperImages,
+      });
+    },
+
+    checkAuthentication() {
+      if (this.isLoggedIn && this.hasExpired) {
+        this.logout();
+        wx.showToast({
+          title: '登录已过期，请重新登录',
+          icon: 'none'
+        }).finally(() => {
+          this.setShowLoginModal(true);
+        });
+        return false;
+      }
+
+      if (!this.isLoggedIn) {
+        const self = this;
+        wx.showModal({
+          title: '提示',
+          content: '您还未登录，请先登录',
+          confirmText: '登录',
+          cancelText: '取消',
+          success: (res) => {
+            if (res.confirm) {
+              self.setShowLoginModal(true);
+            }
+          }
+        });
+        return false;
+      }
+
+      return true;
+    },
+
+    goLogin() {
+      this.setShowLoginModal(true);
+    },
+
+    handleProduction() {
+      if (!this.checkAuthentication() || !this.templateDetail) {
+        return;
+      }
+
+      this.setChatTemplate(this.templateDetail);
+      const firstOption = this.templateDetail?.processOptions?.[0];
+      this.setPrice(firstOption?.price || 0.01);
+      this.setDiscountedPrice(firstOption?.discountedPrice);
+      this.setProductImageUrl(this.templateDetail?.coverUrl || "");
+      this.setAssetId(null);
+
+      wx.navigateTo({
+        url: "/subPackages/produce/index",
+      });
+    },
+
+    async onCreate() {
+      if (!this.checkAuthentication() || !this.templateDetail) {
+        return;
+      }
+
+      this.resetChatStore();
+      this.setChatTemplate(this.templateDetail);
+
+      if (this.templateDetail.coverUrl) {
+        this.setAttachment({ name: '', url: this.templateDetail.coverUrl, contentType: '' });
+      }
+
+      wx.navigateTo({
+        url: "/subPackages/chat/index",
+      });
+    },
+
+    // 轮播变化事件
+    onSwiperChange(e: any) {
+      this.setData({
+        currentSwiperIndex: e.detail.current,
+      });
+    },
+  },
+});
+</script>
+
+<script type="application/json">
+{
+  "usingComponents": {
+    "van-image": "@vant/weapp/image/index",
+    "van-button": "@vant/weapp/button/index",
+    "van-loading": "@vant/weapp/loading/index"
+  }
+}
+</script>
