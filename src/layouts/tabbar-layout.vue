@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import CustomTabbar from '@/components/custom-tabbar.vue'
 import { shouldShowTabbar } from '@/config/tabbar'
+import LoginModal from '@/components/login-modal.vue'
 
 const route = useRoute()
 
@@ -17,7 +18,7 @@ const showTabbar = computed(() => {
     <div class="layout-content" :class="{ 'has-tabbar': showTabbar }">
       <slot />
     </div>
-
+    <login-modal />
     <!-- 只在需要的页面显示 Tabbar -->
     <CustomTabbar v-if="showTabbar" />
   </div>

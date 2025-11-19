@@ -18,6 +18,16 @@ const router = createRouter({
       component: () => import('@/views/agreement/index.vue'),
     },
     {
+      path: '/agreement/privacy',
+      name: 'privacy-agreement',
+      component: () => import('@/views/agreement/privacy-agreement.vue'),
+    },
+    {
+      path: '/agreement/user',
+      name: 'user-agreement',
+      component: () => import('@/views/agreement/user-agreement.vue'),
+    },
+    {
       path: '/auth',
       name: 'auth',
       component: () => import('@/views/auth/index.vue'),
@@ -56,6 +66,21 @@ const router = createRouter({
       path: '/user',
       name: 'user',
       component: () => import('@/views/user/index.vue'),
+    },
+    {
+      path: '/user/about',
+      name: 'user-about',
+      component: () => import('@/views/user/about/index.vue'),
+    },
+    {
+      path: '/user/profile',
+      name: 'user-profile',
+      component: () => import('@/views/user/profile/index.vue'),
+    },
+    {
+      path: '/user/profile/nickname',
+      name: 'user-profile-nickname',
+      component: () => import('@/views/user/profile/nickname.vue'),
     },
   ],
 })

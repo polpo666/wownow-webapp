@@ -6,19 +6,17 @@
     <view class="overflow-auto p-30rpx">
       <!-- 头像区域 -->
       <view class="flex flex-col items-center mb-24rpx">
-        <button 
-          class="w-200rpx h-200rpx p-0 bg-transparent relative" 
-          open-type="chooseAvatar" 
-          bind:chooseavatar="onChooseAvatar"
-        >
+        <button class="w-200rpx h-200rpx p-0 bg-transparent relative" open-type="chooseAvatar"
+          bind:chooseavatar="onChooseAvatar">
           <view class="w-200rpx h-200rpx rounded-full overflow-hidden">
-            <image wx:if="{{ avatarUrl === '' }}" class="w-full h-full" src="../../../assets/user/avatar.png" mode="aspectFit"></image>
+            <image wx:if="{{ avatarUrl === '' }}" class="w-full h-full" src="../../../assets/user/avatar.png"
+              mode="aspectFit"></image>
             <image wx:else class="w-full h-full" src="{{ avatarUrl }}" mode="aspectFill"></image>
           </view>
           <view class="absolute right-0 bottom-0 w-64rpx h-64rpx rounded-full">
             <image class="w-full h-full" src="../../../assets/svgs/icon-avatar-edit.svg" mode="aspectFit" />
           </view>
-        </button> 
+        </button>
       </view>
 
       <!-- 表单区域 -->
@@ -26,10 +24,8 @@
         <!-- 昵称 -->
         <view class="mb-40rpx">
           <text class="block text-32rpx pb-16rpx text-#9C9C9C">昵称</text>
-          <view 
-            class="bg-[#232323] rounded-32rpx py-32rpx px-30rpx flex justify-between items-center active:opacity-80" 
-            bindtap="goEdit"
-          >
+          <view class="bg-[#232323] rounded-32rpx py-32rpx px-30rpx flex justify-between items-center active:opacity-80"
+            bindtap="goEdit">
             <text class="text-white text-28rpx">{{ isLoggedIn ? user?.nickname || "微信用户" : '--' }}</text>
             <image class="w-40rpx h-40rpx" src="../../../assets/svgs/icon-edit.svg" mode="aspectFit" />
           </view>
@@ -44,12 +40,8 @@
       </view>
 
       <!-- 退出登录按钮 -->
-     <view class="fixed bottom-0 left-0 w-full px-30rpx pb-[calc(env(safe-area-inset-bottom)+24rpx)]">
-        <van-button
-          type="primary"
-          custom-class="w-full"
-          bind:tap="handleLogout"
-        >
+      <view class="fixed bottom-0 left-0 w-full px-30rpx pb-[calc(env(safe-area-inset-bottom)+24rpx)]">
+        <van-button type="primary" custom-class="w-full" bind:tap="handleLogout">
           退出登录
         </van-button>
       </view>
@@ -84,10 +76,10 @@ createPage({
 
     async onChooseAvatar(e: any) {
       const { avatarUrl } = e.detail;
-      wx.showToast({ title: '上传中...', icon: 'loading',  mask: true });
+      wx.showToast({ title: '上传中...', icon: 'loading', mask: true });
       try {
         const uploadResult = await this.uploadFile(avatarUrl);
-        
+
         if (uploadResult) {
           const updateResponse = await updateUserDetail({ avatar: uploadResult.url });
 
@@ -97,9 +89,9 @@ createPage({
 
             wx.showToast({ title: '头像更新成功', icon: 'success' });
           } else {
-            wx.showToast({ 
-              title: updateResponse.message || '头像更新失败', 
-              icon: 'none' 
+            wx.showToast({
+              title: updateResponse.message || '头像更新失败',
+              icon: 'none'
             });
             console.warn('Failed to update user avatar:', updateResponse);
           }
@@ -116,7 +108,7 @@ createPage({
     async uploadFile(tempFilePath: string): Promise<Attachment | null> {
       const filename = tempFilePath.split('/').pop() || `avatar-${Date.now()}.jpg`;
       const contentType = 'image/jpeg';
-      
+
       return new Promise((resolve, reject) => {
         // 获取文件信息
         wx.getFileSystemManager().stat({

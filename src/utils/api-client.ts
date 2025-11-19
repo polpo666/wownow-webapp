@@ -1,8 +1,7 @@
+import { getToken } from '@/utils/storage'
+import { useAuthStore } from '@/stores/auth'
 import { WOWNOW_API_URL } from '@/lib/constants'
-import { useAuthStore } from '@/store/auth'
-import mpx from '@mpxjs/core'
-import mpxFetch, { PreCacheOption } from '../utils/fetch/index.js'
-mpx.use(mpxFetch)
+import { showFailToast } from 'vant'
 
 // 通用 API 客户端
 export interface APIResponse<T> {
@@ -14,10 +13,9 @@ export interface APIResponse<T> {
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   headers?: Record<string, string>
-  body?: any
-  params?: Record<string, any> // 添加 params 支持
-  skipAuth?: boolean
-  usePre?: PreCacheOption<any>
+  body?: unknown
+  params?: Record<string, string | number | boolean | null | undefined> // 添加 params 支持
+  skipAuth?: boolean // 跳过认证
 }
 
 class APIClient {
@@ -27,8 +25,15 @@ class APIClient {
     this.baseURL = baseURL
   }
 
+  // 获取 token（从 localStorage 获取）
+  private getToken(): string | null {
+    return getToken()
+  }
+
   // 辅助方法：构建查询字符串
-  private buildQueryString(params: Record<string, any>): string {
+  private buildQueryString(
+    params: Record<string, string | number | boolean | null | undefined>,
+  ): string {
     const queryParams = new URLSearchParams()
 
     Object.entries(params).forEach(([key, value]) => {
@@ -42,24 +47,20 @@ class APIClient {
   }
 
   async request<T>(endpoint: string, options: RequestOptions = {}): Promise<APIResponse<T>> {
-    const { method = 'GET', headers = {}, body, params, usePre, skipAuth = false } = options
+    const { method = 'GET', headers = {}, body, params, skipAuth = false } = options
 
-    // 如果需要认证，先检查登录状态并尝试刷新token
-    if (!skipAuth) {
-      const authStore = useAuthStore()
-      if (authStore.checkAndLogoutIfExpired()) {
-        throw new Error('Token expired')
-      } else {
-        await authStore.refreshTokenIfNeeded()
-      }
+    // 如果有查询参数，添加到 endpoint
+    let fullEndpoint = endpoint
+    if (params && Object.keys(params).length > 0) {
+      fullEndpoint += this.buildQueryString(params)
     }
 
-    const token = !skipAuth ? mpx.getStorageSync('token') : undefined
+    // 从 store 或 localStorage 获取 token
+    const token = skipAuth ? null : this.getToken()
 
-    const config: any = {
+    const config: RequestInit = {
       method,
-      params,
-      header: {
+      headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
@@ -67,39 +68,34 @@ class APIClient {
     }
 
     if (body) {
-      config.data = JSON.stringify(body)
-    }
-    const url = `${this.baseURL}${endpoint}`
-    const response = await mpx.xfetch.fetch({
-      url,
-      ...config,
-      usePre: usePre || {},
-    })
-    const data: APIResponse<T> = response.data as APIResponse<T>
-
-    if (response.statusCode !== 200) {
-      throw new Error(data.message || `API request failed: ${response.statusCode}`)
+      config.body = JSON.stringify(body)
     }
 
-    if (data.code === 401) {
-      // if unauthorized, clear token
-      useAuthStore().logout()
-      wx.showToast({
-        title: '登录已过期，请重新登录',
-        icon: 'none',
-        duration: 2000,
-      })
+    const url = `${this.baseURL}${fullEndpoint}`
+    const response = await fetch(url, config)
+    const data: APIResponse<T> = await response.json()
+
+    // 检查 401 未授权响应
+    if (response.status === 401 || data.code === 401) {
+      const authStore = useAuthStore()
+      authStore.logout()
+      authStore.setShowLoginModal(true)
+      showFailToast('登录已过期，请重新登录')
+      throw new Error('Unauthorized: Session expired')
     }
+
+    if (!response.ok) {
+      throw new Error(data.message || `API request failed: ${response.status}`)
+    }
+
     return data
   }
 
-  // 便捷方法 - 修改 get 方法支持 params
   async get<T>(
     endpoint: string,
     options?: {
       headers?: Record<string, string>
-      params?: Record<string, any>
-      usePre?: PreCacheOption<any>
+      params?: Record<string, string | number | boolean | null | undefined>
       skipAuth?: boolean
     },
   ): Promise<APIResponse<T>> {
@@ -108,7 +104,7 @@ class APIClient {
 
   async post<T>(
     endpoint: string,
-    body?: any,
+    body?: unknown,
     headers?: Record<string, string>,
     skipAuth?: boolean,
   ): Promise<APIResponse<T>> {
@@ -122,7 +118,7 @@ class APIClient {
 
   async put<T>(
     endpoint: string,
-    body?: any,
+    body?: unknown,
     headers?: Record<string, string>,
     skipAuth?: boolean,
   ): Promise<APIResponse<T>> {
@@ -139,7 +135,11 @@ class APIClient {
     headers?: Record<string, string>,
     skipAuth?: boolean,
   ): Promise<APIResponse<T>> {
-    return this.request<T>(endpoint, { method: 'DELETE', headers, skipAuth })
+    return this.request<T>(endpoint, {
+      method: 'DELETE',
+      headers,
+      skipAuth,
+    })
   }
 }
 

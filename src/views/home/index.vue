@@ -14,7 +14,6 @@
 }
 
 .page-content {
-  padding: 56px 16px 16px;
   color: #fff;
 }
 </style>
