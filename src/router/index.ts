@@ -48,6 +48,11 @@ const router = createRouter({
       component: () => import('@/views/assets/index.vue'),
     },
     {
+      path: '/assets/detail',
+      name: 'assets-detail',
+      component: () => import('@/views/assets/detail.vue'),
+    },
+    {
       path: '/nfc',
       name: 'nfc',
       component: () => import('@/views/nfc/index.vue'),
