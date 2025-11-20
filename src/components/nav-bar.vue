@@ -1,11 +1,16 @@
 <template>
   <div>
     <div class="nav-bar" :style="{ backgroundColor: bgColor }">
-      <div class="nav-content" @click="handleBack">
-        <van-icon v-if="isBack" :name="iconName" size="20" color="white" class="back-icon" />
+      <div class="nav-content">
+        <div class="nav-left" @click="handleBack">
+          <van-icon v-if="isBack" :name="iconName" size="20" color="white" class="back-icon" />
+        </div>
         <div class="nav-title-wrapper">
           <div v-if="title" class="nav-title">{{ title }}</div>
           <div v-if="subTitle" class="nav-subtitle">( {{ subTitle }} )</div>
+        </div>
+        <div class="nav-right">
+          <slot name="right"></slot>
         </div>
       </div>
     </div>
@@ -82,10 +87,25 @@ onUnmounted(() => {
   align-items: center;
   height: 100%;
   position: relative;
-  padding-left: 14px;
+  padding: 0 14px;
+}
+
+.nav-left {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .back-icon {
+  flex-shrink: 0;
+}
+
+.nav-right {
+  position: absolute;
+  right: 14px;
+  display: flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
@@ -106,6 +126,7 @@ onUnmounted(() => {
 
 .nav-subtitle {
   font-size: 12px;
+  margin-top: 2px;
 }
 
 .nav-placeholder {

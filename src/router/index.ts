@@ -48,6 +48,16 @@ const router = createRouter({
       component: () => import('@/views/create/index.vue'),
     },
     {
+      path: '/create/category',
+      name: 'create-category',
+      component: () => import('@/views/create/category.vue'),
+    },
+    {
+      path: '/create/craft',
+      name: 'create-craft',
+      component: () => import('@/views/create/craft.vue'),
+    },
+    {
       path: '/assets',
       name: 'assets',
       component: () => import('@/views/assets/index.vue'),

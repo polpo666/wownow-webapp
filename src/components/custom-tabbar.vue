@@ -1,5 +1,30 @@
+<template>
+  <div v-if="shouldShowTabbar" class="custom-tabbar">
+    <van-tabbar
+      v-model="active"
+      :fixed="true"
+      :placeholder="true"
+      :safe-area-inset-bottom="true"
+      @change="onChange"
+    >
+      <van-tabbar-item v-for="(item, index) in tabbarConfig" :key="index">
+        <!-- 特殊的创建按钮 -->
+        <template v-if="item.isSpecial">
+          <div class="create-button" @click="handleCreate">
+            <van-icon name="plus" size="18" color="#000" />
+          </div>
+        </template>
+        <!-- 普通文字 -->
+        <template v-else>
+          {{ item.text }}
+        </template>
+      </van-tabbar-item>
+    </van-tabbar>
+  </div>
+</template>
+
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { tabbarConfig, getActiveTabIndex } from '@/config/tabbar'
 
@@ -8,6 +33,11 @@ const route = useRoute()
 
 // 当前激活的标签
 const active = ref(0)
+
+// 是否应该显示 tabbar（create 页面不显示）
+const shouldShowTabbar = computed(() => {
+  return route.path !== '/create'
+})
 
 // 根据当前路由更新激活状态
 watch(
@@ -26,12 +56,6 @@ const onChange = (index: number) => {
   const item = tabbarConfig[index]
   if (!item) return
 
-  // 如果是特殊的创建按钮，执行特殊逻辑
-  if (item.isSpecial) {
-    handleCreate()
-    return
-  }
-
   // 普通标签切换
   if (route.path !== item.path) {
     router.push(item.path)
@@ -45,31 +69,6 @@ const handleCreate = () => {
   router.push('/create')
 }
 </script>
-
-<template>
-  <div class="custom-tabbar">
-    <van-tabbar
-      v-model="active"
-      :fixed="true"
-      :placeholder="true"
-      :safe-area-inset-bottom="true"
-      @change="onChange"
-    >
-      <van-tabbar-item v-for="(item, index) in tabbarConfig" :key="index">
-        <!-- 特殊的创建按钮 -->
-        <template v-if="item.isSpecial">
-          <div class="create-button">
-            <van-icon name="plus" size="18" color="#000" />
-          </div>
-        </template>
-        <!-- 普通文字 -->
-        <template v-else>
-          {{ item.text }}
-        </template>
-      </van-tabbar-item>
-    </van-tabbar>
-  </div>
-</template>
 
 <style scoped>
 /* 创建按钮样式 */

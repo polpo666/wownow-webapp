@@ -7,6 +7,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    ChatInterface: typeof import('./src/components/agent-ui/ChatInterface.vue')['default']
     CouponCard: typeof import('./src/components/coupon-selector/coupon-card.vue')['default']
     CouponSelector: typeof import('./src/components/coupon-selector/index.vue')['default']
     CustomTabbar: typeof import('./src/components/custom-tabbar.vue')['default']

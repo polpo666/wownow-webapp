@@ -34,3 +34,13 @@ export function getPromptStyles(
     skipAuth: true,
   })
 }
+
+// 获取分类及模板列表
+export function getCategoryWithTemplates(
+  params?: TemplateListReq,
+): Promise<APIResponse<PageRes<any[]>>> {
+  return apiClient.get<PageRes<any[]>>('/v1/template/category-with-templates', {
+    params: { ...params },
+    skipAuth: true,
+  })
+}
