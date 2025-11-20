@@ -13,6 +13,11 @@ const router = createRouter({
       component: () => import('@/views/home/index.vue'),
     },
     {
+      path: '/home/template',
+      name: 'home-template',
+      component: () => import('@/views/home/template.vue'),
+    },
+    {
       path: '/agreement',
       name: 'agreement',
       component: () => import('@/views/agreement/index.vue'),

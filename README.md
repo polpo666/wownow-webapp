@@ -1,4 +1,4 @@
-# wownow-web-app
+# wownow-webapp
 
 一个基于 Vue 3 + Vite + TypeScript 的现代化 Web 应用，内置移动端适配方案。
 
