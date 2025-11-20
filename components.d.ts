@@ -7,11 +7,16 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    CouponCard: typeof import('./src/components/coupon-selector/coupon-card.vue')['default']
+    CouponSelector: typeof import('./src/components/coupon-selector/index.vue')['default']
     CustomTabbar: typeof import('./src/components/custom-tabbar.vue')['default']
     LoginModal: typeof import('./src/components/login-modal.vue')['default']
     MobileDemo: typeof import('./src/components/MobileDemo.vue')['default']
+    NavBar: typeof import('./src/components/nav-bar.vue')['default']
+    Nfc: typeof import('./src/components/nfc.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    VanActionSheet: typeof import('vant/es')['ActionSheet']
     VanBadge: typeof import('vant/es')['Badge']
     VanButton: typeof import('vant/es')['Button']
     VanCell: typeof import('vant/es')['Cell']
@@ -19,6 +24,7 @@ declare module 'vue' {
     VanCheckbox: typeof import('vant/es')['Checkbox']
     VanCollapse: typeof import('vant/es')['Collapse']
     VanCollapseItem: typeof import('vant/es')['CollapseItem']
+    VanDialog: typeof import('vant/es')['Dialog']
     VanEmpty: typeof import('vant/es')['Empty']
     VanField: typeof import('vant/es')['Field']
     VanIcon: typeof import('vant/es')['Icon']

@@ -1,9 +1,7 @@
 <template>
   <div class="template-page">
-    <!-- 背景 -->
-    <div class="bg-cover"></div>
     <!-- 导航栏 -->
-    <van-nav-bar title="" left-arrow fixed placeholder @click-left="goBack" />
+    <nav-bar title="模板详情" :is-back="true" />
 
     <!-- 内容区域 -->
     <div class="content-wrapper">
@@ -77,11 +75,17 @@
 
     <!-- 底部按钮组 -->
     <div v-if="templateDetail" class="bottom-actions">
-      <van-button block type="primary" class="action-button" @click="onCreate">
-        我要二创
+      <van-button block type="primary" color="#FADA39" class="action-button" @click="onCreate">
+        <span class="action-button-text">我要二创</span>
       </van-button>
-      <van-button block type="primary" class="action-button" @click="handleProduction">
-        直接下单
+      <van-button
+        block
+        type="primary"
+        color="#FADA39"
+        class="action-button"
+        @click="handleProduction"
+      >
+        <span class="action-button-text">直接下单</span>
       </van-button>
     </div>
   </div>
@@ -93,11 +97,14 @@ import { useRouter, useRoute } from 'vue-router'
 import { getTemplateDetail } from '@/api/template'
 import type { WownowTemplate } from '@/types/template'
 import { useAuthStore } from '@/stores/auth'
+import { useProduceStore } from '@/stores/produce'
 import { showFailToast, showConfirmDialog } from 'vant'
+import NavBar from '@/components/nav-bar.vue'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const produceStore = useProduceStore()
 
 const templateDetail = ref<WownowTemplate | null>(null)
 const isLoading = ref(false)
@@ -162,11 +169,6 @@ const fetchTemplateDetail = async (id: number) => {
   }
 }
 
-// 返回
-const goBack = () => {
-  router.back()
-}
-
 // 预览图片
 const previewImage = (current: string) => {
   if (!swiperImages.value || swiperImages.value.length === 0) return
@@ -227,14 +229,15 @@ const handleProduction = async () => {
     return
   }
 
-  // TODO: 实现下单逻辑
-  // 需要设置 produce store 的相关状态
-  // setChatTemplate(templateDetail.value)
-  // const firstOption = templateDetail.value?.processOptions?.[0]
-  // setPrice(firstOption?.price || 0.01)
-  // setDiscountedPrice(firstOption?.discountedPrice)
-  // setProductImageUrl(templateDetail.value?.coverUrl || '')
-  // setAssetId(null)
+  // 设置 produce store 的相关状态
+  const firstOption = templateDetail.value?.processOptions?.[0]
+  produceStore.setChatTemplate(templateDetail.value)
+  produceStore.setProductImageUrl(templateDetail.value?.coverUrl || '')
+  produceStore.setPrice(firstOption?.price || 0.01)
+  produceStore.setDiscountedPrice(firstOption?.discountedPrice)
+  produceStore.setAssetId(null)
+  produceStore.setQuantity(1)
+  produceStore.clearNfc()
 
   router.push('/produce')
 }
@@ -348,9 +351,12 @@ onMounted(() => {
 .swiper-container {
   position: relative;
   width: 100%;
-  height: 725px;
-  max-height: 46vh;
+  height: 360px;
   background: #363636;
+}
+
+.swiper-container :deep(.van-swipe) {
+  height: 100%;
 }
 
 .swiper-item {
@@ -364,6 +370,8 @@ onMounted(() => {
 .swiper-image {
   width: 100%;
   height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
   cursor: pointer;
 }
@@ -386,7 +394,7 @@ onMounted(() => {
 
 .info-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
   gap: 16px;
@@ -452,9 +460,9 @@ onMounted(() => {
 .tag-item {
   color: #fff;
   font-size: 13px;
-  padding: 8px 16px;
+  padding: 6px 14px;
   border: 1px solid #575757;
-  border-radius: 24px;
+  border-radius: 10px;
   white-space: nowrap;
 }
 
@@ -474,5 +482,13 @@ onMounted(() => {
 
 .action-button {
   flex: 1;
+  height: 44px;
+  border-radius: 16px;
+}
+
+.action-button-text {
+  font-size: 16px;
+  font-weight: 500;
+  color: black;
 }
 </style>

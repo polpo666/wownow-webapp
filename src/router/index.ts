@@ -63,6 +63,21 @@ const router = createRouter({
       component: () => import('@/views/nfc/index.vue'),
     },
     {
+      path: '/nfc/link',
+      name: 'nfc-link',
+      component: () => import('@/views/nfc/link.vue'),
+    },
+    {
+      path: '/nfc/custom',
+      name: 'nfc-custom',
+      component: () => import('@/views/nfc/custom.vue'),
+    },
+    {
+      path: '/nfc/agent',
+      name: 'nfc-agent',
+      component: () => import('@/views/nfc/agent/index.vue'),
+    },
+    {
       path: '/order',
       name: 'order',
       component: () => import('@/views/order/index.vue'),
@@ -71,6 +86,16 @@ const router = createRouter({
       path: '/produce',
       name: 'produce',
       component: () => import('@/views/produce/index.vue'),
+    },
+    {
+      path: '/produce/config',
+      name: 'produce-config',
+      component: () => import('@/views/produce/config.vue'),
+    },
+    {
+      path: '/produce/pay',
+      name: 'produce-pay',
+      component: () => import('@/views/produce/pay.vue'),
     },
     {
       path: '/user',
